@@ -1,0 +1,32 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>org.pp</groupId>
+  <artifactId>ObjectStore</artifactId>
+  <version>1.0</version>
+  <name>ObjectStore</name>
+  <description>Persistence store of objects</description>
+  
+  <properties>
+		<maven.compiler.source>1.8</maven.compiler.source>
+		<maven.compiler.target>1.8</maven.compiler.target>
+  </properties>
+  
+  <dependencies>
+   <dependency>
+   		<groupId>org.pp</groupId>
+  		<artifactId>storagengine</artifactId>
+  		<version>1.0</version>
+   </dependency>
+   <dependency>
+   		<groupId>org.pp</groupId>
+  		<artifactId>QueryEngine</artifactId>
+  		<version>1.0</version>
+   </dependency>
+	<dependency>
+		<groupId>junit</groupId>
+		<artifactId>junit</artifactId>
+		<version>4.4</version>
+		<scope>test</scope>
+	</dependency>
+  </dependencies>	
+</project>
