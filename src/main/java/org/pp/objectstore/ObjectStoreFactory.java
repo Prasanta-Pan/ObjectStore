@@ -3,12 +3,17 @@ package org.pp.objectstore;
 import java.net.URI;
 
 import org.pp.objectstore.interfaces.ObjectStore;
+import static org.pp.storagengine.api.imp.Util.MB;
 
 public abstract class ObjectStoreFactory {
 	/**
 	 * Singleton Object factory
 	 */
 	private static ObjectStoreFactory osFactory = null;
+	/**
+	 * Default cache size is 32MB
+	 */
+	static final long defaultCacheSize = 32 * MB;
 
 	/**
 	 * Open Object store of class T
@@ -31,8 +36,19 @@ public abstract class ObjectStoreFactory {
 	 * @throws Exception
 	 */
 	public static final synchronized ObjectStoreFactory open(URI uri) throws Exception {
+		return open(uri, defaultCacheSize);
+	}
+	
+	/**
+	 * Open ObjectStore factory if not open yet with support for object store caching
+	 * @param uri
+	 * @param cacheSize
+	 * @return
+	 * @throws Exception
+	 */
+	public static final synchronized ObjectStoreFactory open(URI uri, long cacheSize) throws Exception {
 		if (osFactory == null)
-			osFactory = new ObjectStoreFactoryImp(uri);
+			osFactory = new ObjectStoreFactoryImp(uri, cacheSize);
 		//
 		return osFactory;
 	}

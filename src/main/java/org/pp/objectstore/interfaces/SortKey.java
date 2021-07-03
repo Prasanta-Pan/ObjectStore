@@ -13,5 +13,9 @@ import java.lang.annotation.Target;
  *
  */
 public @interface SortKey {
-	
+	/**
+	 * Sort Key order field
+	 * @return
+	 */
+	public int value() default 1;
 }

@@ -35,6 +35,8 @@ public class BasicTest {
 	
 	@BeforeClass
 	public static void init() throws Exception {
+		// delete database if exist
+		delDb();
 		// database location
 		URI uri = new URI("file:" + dbRoot);
 		// open database
@@ -115,7 +117,7 @@ public class BasicTest {
 			float price = prices[ran.nextInt(0, prices.length)];
 			int total = totals[ran.nextInt(0, totals.length)];
 			// create order object
-			Order order = new Order(email, noOrder, price, total);
+			Order order = new Order(email, noOrder, price, total, System.currentTimeMillis());
 			factory.openStore(Order.class).store(order);			
 		}
 	}

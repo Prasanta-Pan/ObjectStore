@@ -1,6 +1,7 @@
 package org.pp.objectstore.interfaces;
 
 import org.pp.objectstore.CacheKey;
+import org.pp.objectstore.CacheValue;
 import org.pp.storagengine.api.KVEngine;
 
 public interface GlobalObjectStoreContext {
@@ -15,7 +16,7 @@ public interface GlobalObjectStoreContext {
 	 * @param key - Key (String/Integer/Long)
 	 * @param value  - Any value
 	 */
-	public Object put(CacheKey key, Object value);
+	public CacheValue put(CacheKey key, CacheValue value);
 	/**
 	 * Global cache put if absent
 	 * @param cname
@@ -23,7 +24,7 @@ public interface GlobalObjectStoreContext {
 	 * @param value
 	 * @return
 	 */
-	public Object putIfAbsent(CacheKey key, Object value);
+	public CacheValue putIfAbsent(CacheKey key, CacheValue value);
 	
 	/**
 	 * Global cache get.
@@ -31,13 +32,13 @@ public interface GlobalObjectStoreContext {
 	 * @param key - Key (String/Integer/Long)
 	 * @return
 	 */
-	public Object get(CacheKey key);
+	public CacheValue get(CacheKey key);
 	/**
 	 * Global cache remove
 	 * @param cname
 	 * @param key
 	 * @return
 	 */
-	public Object remove(CacheKey key);	
+	public CacheValue remove(CacheKey key);	
 	
 }

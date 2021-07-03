@@ -1,7 +1,8 @@
 package org.pp.objectstore;
 
-import static org.pp.objectstore.Util.comp;
+
 import static org.pp.objectstore.Util.validateClassName;
+import static org.pp.storagengine.api.imp.Util.MB;
 
 import java.lang.ref.SoftReference;
 import java.net.URI;
@@ -13,6 +14,7 @@ import org.pp.objectstore.interfaces.GlobalObjectStoreContext;
 import org.pp.objectstore.interfaces.ObjectStore;
 import org.pp.storagengine.api.KVEngine;
 import org.pp.storagengine.api.imp.KVEngineImp;
+import org.pp.storagengine.api.imp.LRUCache;
 
 class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectStoreContext {
 	/**
@@ -27,15 +29,22 @@ class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectSt
 	 * Object store cache
 	 */
 	private static ConcurrentMap<String, SoftReference<ObjectStore<?>>> cache = new ConcurrentHashMap<>();
+	/**
+	 * LRU cache for object caching
+	 */
+	private static LRUCache<CacheKey, CacheValue> objCache;
 		
 	/**
 	 * Create singleton ObjectStoreFactory
 	 * @param uri
 	 * @throws Exception 
 	 */
-	ObjectStoreFactoryImp(URI uri) throws Exception {
+	ObjectStoreFactoryImp(URI uri, long cacheSize) throws Exception {
 		if (uri == null)
 			throw new NullPointerException("URI can not be null");
+		// check valid cache size
+		if (cacheSize < defaultCacheSize)
+			throw new RuntimeException("Minimum cache size should be 32MB");
 		// check protocol
 		switch (uri.getScheme()) {
 		case "file":
@@ -44,13 +53,15 @@ class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectSt
 			// Get system properties
 			Properties props = System.getProperties();
 			// Create or open Database
-			kvStore = new KVEngineImp(DB_ROOT, props, comp);
+			kvStore = new KVEngineImp(DB_ROOT, props, new ObjectStoreComparator());
 			break;
 		case "tcp":
 			throw new RuntimeException("TCP scheme/protocol currently not supported");
 		default:
 			throw new RuntimeException("Unsupported scheme/protocole : " + uri.getScheme());
-		}	
+		}
+		// initialise cache
+		objCache = new LRUCache<>(MB, cacheSize);		
 	}
 	
 	@Override
@@ -93,6 +104,7 @@ class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectSt
 			kvStore.close();
 			cache.clear();
 			cache = null;
+			objCache = null;
 		}		
 	}
 
@@ -103,26 +115,26 @@ class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectSt
 	}
 
 	@Override
-	public Object put(CacheKey key, Object value) {
+	public CacheValue put(CacheKey key, CacheValue value) {
 		// TODO Auto-generated method stub
-		return null;
+		return objCache.put(key, value);
 	}
 
 	@Override
-	public Object putIfAbsent(CacheKey key, Object value) {
+	public CacheValue putIfAbsent(CacheKey key, CacheValue value) {
 		// TODO Auto-generated method stub
-		return null;
+		return objCache.putIfAbsent(key, value);
 	}
 
 	@Override
-	public Object get(CacheKey key) {
+	public CacheValue get(CacheKey key) {
 		// TODO Auto-generated method stub
-		return null;
+		return objCache.get(key);
 	}
 
 	@Override
-	public Object remove(CacheKey key) {
+	public CacheValue remove(CacheKey key) {
 		// TODO Auto-generated method stub
-		return null;
+		return objCache.remove(key);
 	}
 }

@@ -1,74 +1,63 @@
 package org.pp.objectstore;
 
+import java.util.Arrays;
+
+import org.pp.storagengine.api.CacheEntry;
+
 /**
  * To be used for cache key
  * 
  * @author prasantsmac
  *
  */
-public class CacheKey implements org.pp.storagengine.api.CacheEntry {
+public class CacheKey implements CacheEntry {
 	/**
-	 * Collection name
+	 * Cache Key
 	 */
-	private String cname;
+	private byte[] key;
 	/**
-	 * record id
-	 */
-	private Object id;
-
+     * No default cache key instance
+     */
+	private CacheKey() {
+		
+	}
 	/**
-	 * Create a cache key
-	 * 
-	 * @param cname
-	 * @param id
+	 * Construct a cache key instance
+	 * @param key
 	 */
-	public CacheKey(String cname, Object id) {
-		if (cname == null || id == null)
-			throw new NullPointerException("collection name and id can not be null");
-		this.cname = cname;
-		this.id = id;
+	public CacheKey(byte[] key) {
+		this();
+		if (key == null)
+			throw new NullPointerException("Cache key can not be null");
+		this.key = key;	
 	}
 
 	/**
-	 * Get collection name
-	 * 
+	 * Return the key
 	 * @return
 	 */
-	public String getCName() {
-		return cname;
+	public byte[] getKey() {
+		return key;
 	}
-
-	/**
-	 * Get object id
-	 */
-	public Object getId() {
-		return id;
+	
+	@Override
+	public int entrySize() {
+		// TODO Auto-generated method stub
+		return key.length;
 	}
 
 	@Override
 	public int hashCode() {
-		int hc = cname.hashCode();
-		return 31 * hc + id.hashCode();
+		return key.hashCode();
 	}
 
 	@Override
 	public boolean equals(Object o) {
 		if (o instanceof CacheKey) {
 			CacheKey anthr = (CacheKey) o;
-			if (cname.equals(anthr.cname) && id.equals(anthr.id))
+			if (Arrays.equals(key, anthr.key))
 				return true;
 		}
 		return false;
-	}
-
-	@Override
-	public String toString() {
-		return "CollectionName=" + cname + ",id=" + id;
-	}
-
-	@Override
-	public int entrySize() {
-		// TODO Auto-generated method stub
-		return 0;
-	}
+	}	
 }

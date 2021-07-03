@@ -5,11 +5,12 @@ import java.util.Date;
 import org.pp.objectstore.interfaces.Collection;
 import org.pp.objectstore.interfaces.Id;
 import org.pp.objectstore.interfaces.SortKey;
+import org.pp.objectstore.interfaces.Version;
 
 @Collection("order")
 public class Order {
-	//
-	@SortKey
+	// First Sort Key is based on customer email
+	@SortKey(1)
 	private String email;
 	//
 	@Id
@@ -20,18 +21,42 @@ public class Order {
 	private float unitPrice;
 	//
 	private int total;
-	//
+	// Second sort key
+	@SortKey(2)
 	private long orderDate;
+	// Version field for atomic update
+	@Version
+	private int ver;
 
 	public Order() {
 	}
-
-	public Order(String email, int noOrders, float unitPrice, int total) {
+	
+    /**
+     * Constructor to find whole object
+     * @param email
+     * @param oDate
+     * @param orderId
+     */
+	public Order(String email, long oDate, long orderId) {
+		this.email = email;
+		this.orderDate = oDate;
+		this.orderId = orderId;
+	}
+	
+	/**
+	 * To create new Order object
+	 * @param email
+	 * @param noOrders
+	 * @param unitPrice
+	 * @param total
+	 * @param orderDate
+	 */
+	public Order(String email, int noOrders, float unitPrice, int total, long orderDate) {
 		this.email = email;
 		this.noOrders = noOrders;
 		this.unitPrice = unitPrice;
 		this.total = total;
-		this.orderDate = System.currentTimeMillis();
+		this.orderDate = orderDate;
 	}
 
 	public String getEmail() {
@@ -81,12 +106,17 @@ public class Order {
 	public void setOrderDate(long orderDate) {
 		this.orderDate = orderDate;
 	}
+	
+	public int getVersion() {
+		return ver;
+	}
 
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
 		return sb.append("email=" + email + ",").append("orderId=" + orderId + ",").append("noOrders=" + noOrders + ",")
-				.append("unitPrice=" + unitPrice + ",").append("total=" + total + ",").append("orderDate=" + new Date(orderDate))
+				.append("unitPrice=" + unitPrice + ",").append("total=" + total + ",").append("orderDate=" + new Date(orderDate) + ",")
+				.append("version=" + ver)
 				.toString();
 	}
 
