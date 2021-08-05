@@ -1,0 +1,14 @@
+################ Steps to be executed for openStore(Class<T> clazz) ######################
+1. Find store name, create new one if not found
+2. Class introspection, throw exceptions if malformed 
+3. Load Store meta info from store, throw exception if modifier and type mismatch
+4. Save store name if new store has to be created
+
+################ Steps to be executed for redefine(Class<T> clazz, Map<String, Object> m) ######################
+1. Find store name, throw exception if not found
+2. Class introspection, throw exceptions if malformed 
+3. Load meta info but don't validate
+4. Generate a new store code 
+5. create a new store
+6. 
+

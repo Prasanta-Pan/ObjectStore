@@ -129,7 +129,7 @@ public class OrderTest {
 	public void test3() throws Exception {
 		System.out.println("########################################## Reverse Iterator ########################################");
 		// open iterator
-	    ObjectIterator<Order> itr = factory.openStore(Order.class).revIterator();
+	    ObjectIterator<Order> itr = factory.openStore(Order.class).iterator(true);
 	    while (itr.hasNext()) {
 	    	System.out.println(itr.next());
 	    }
@@ -168,7 +168,7 @@ public class OrderTest {
 			tmp.setUnitPrice(price);
 			int total = totals[ran.nextInt(0, totals.length)];
 			tmp.setTotal(total);
-			os.update(tmp);
+			//os.update(tmp);
 			oList.add(tmp);
 			System.out.println("After Update: " + tmp);
 		}

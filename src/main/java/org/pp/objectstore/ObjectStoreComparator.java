@@ -1,10 +1,11 @@
 package org.pp.objectstore;
 
-import static org.pp.objectstore.DataTypes.D_TYP_DBL;
-import static org.pp.objectstore.DataTypes.D_TYP_FLT;
-import static org.pp.objectstore.DataTypes.D_TYP_INT;
-import static org.pp.objectstore.DataTypes.D_TYP_LNG;
-import static org.pp.objectstore.DataTypes.D_TYP_STR;
+import static org.pp.objectstore.interfaces.Constants.D_TYP_BYTE;
+import static org.pp.objectstore.interfaces.Constants.D_TYP_DBL;
+import static org.pp.objectstore.interfaces.Constants.D_TYP_FLT;
+import static org.pp.objectstore.interfaces.Constants.D_TYP_INT;
+import static org.pp.objectstore.interfaces.Constants.D_TYP_LNG;
+import static org.pp.objectstore.interfaces.Constants.D_TYP_STR;
 
 import java.nio.ByteBuffer;
 import java.util.Comparator;
@@ -32,6 +33,24 @@ final class ObjectStoreComparator implements Comparator<byte[]> {
 				throw new RuntimeException("Data types doesn't matched while comparing keys");
 			// handle data type specific comparison
 			switch (b) {
+			    // comparing byte key
+				case D_TYP_BYTE :
+				   byte lb = l.get();
+				   byte rb = r.get();
+				   if (lb != rb) {
+					   return lb > rb ? 1 : -1;
+				   }
+				   break;
+				// comparing long key
+				case D_TYP_LNG:
+					long ll = l.getLong();
+					long rl = r.getLong();
+					// if not equal
+					if (ll != rl) {
+						return ll > rl ? 1 : -1;
+					}
+					break;
+				// comparing int key
 				case D_TYP_INT:
 					int li = l.getInt();
 					int ri = r.getInt();
@@ -39,6 +58,7 @@ final class ObjectStoreComparator implements Comparator<byte[]> {
 						return li > ri ? 1 : -1;
 					}
 					break;
+				// comparing string key
 				case D_TYP_STR:
 					int lcl = l.getInt() * 2 + l.position();
 					int rcl = r.getInt() * 2 + r.position();
@@ -51,14 +71,7 @@ final class ObjectStoreComparator implements Comparator<byte[]> {
 						}
 					}						
 					break;
-				case D_TYP_LNG:
-					long ll = l.getLong();
-					long rl = r.getLong();
-					// if not equal
-					if (ll != rl) {
-						return ll > rl ? 1 : -1;
-					}
-					break;
+				// comparing float key
 				case D_TYP_FLT:
 					float lf = l.getFloat();
 					float rf = r.getFloat();
@@ -67,13 +80,15 @@ final class ObjectStoreComparator implements Comparator<byte[]> {
 						return lf > rf ? 1 : -1;
 					}
 					break;
+				// comparing double key
 				case D_TYP_DBL:
 					double ld = l.getDouble();
 					double rd = r.getDouble();
 					if (ld != rd) {
 						return ld > rd ? 1 : -1;
 					}
-					break;					
+					break;
+				// otherwise throw exception 
 				default:
 					throw new RuntimeException("Invalid data type");
 			}

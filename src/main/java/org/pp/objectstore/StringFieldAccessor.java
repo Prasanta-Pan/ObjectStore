@@ -1,12 +1,12 @@
 package org.pp.objectstore;
 
-import static org.pp.objectstore.DataTypes.D_TYP_STR;
-import static org.pp.objectstore.Util.byteBufferToString;
-import static org.pp.objectstore.Util.invalidType;
-import static org.pp.objectstore.Util.stringToByteBuffer;
+import static org.pp.objectstore.Util.extend;
+import static org.pp.objectstore.interfaces.Constants.D_TYP_STR;
 
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
+
+import org.pp.objectstore.interfaces.FieldAccessor;
 /**
  * String Field accessor
  * @author prasantsmac
@@ -14,84 +14,135 @@ import java.nio.ByteBuffer;
  */
 final class StringFieldAccessor extends AbstractFieldAccessor {
 	/**
-	 * Backing value could be either byte array or String
+	 * Backing string value
 	 */
-    private Object val;
-    /**
-     * Only constructor
-     * @param fld
-     */
-	protected StringFieldAccessor(Field fld) {
-		super(fld);			
-	}
+	private String val;
 		
-	@Override
-	public ByteBuffer set(ByteBuffer buf, Object target) throws Exception {
-		String str = byteBufferToString(buf, fld);
-		fld.set(target, str);
-		return buf;
-	}
 	/**
-	 * check if value still byte array if not
+	 * Extract string value from buffer
+	 * @param buf
 	 * @return
 	 */
-	private Object byteArrayToString() {
-		if (val instanceof byte[]) {
-			byte[] arrVal = (byte[]) val;
-			// extract all characters from byte array
-			val = byteBufferToString(ByteBuffer.wrap(arrVal), null);;
-		}
+	static final String parseString(ByteBuffer buf) {
+		// validate type
+		if (buf.get() != D_TYP_STR)
+			throw new RuntimeException("String data type was expected");
+		// get string length
+		int len = buf.getInt();
+		// allocate char arrays of length
+		char[] chars = new char[len];
+		// get character by character
+		for (int i = 0; i < len; i++)
+			chars[i] = buf.getChar();
+		// decode to string
+		return new String(chars);
+	}
+	/**
+	 * Serialise string value to buffer
+	 * @param buf
+	 * @param val
+	 * @return
+	 */
+	static final ByteBuffer serialise(ByteBuffer buf, String val) {
+		// if string value is null 
+		val = val == null ? "" : val;
+		// get the length of the string
+		int len = val.length();
+		// extend buffer if necessary
+		buf = extend(buf, 5 + len * 2);
+		// set string type
+		buf.put(D_TYP_STR);
+		// set char length
+		buf.putInt(len);
+		// copy chars
+		for (int i = 0; i < len; i++)
+			buf.putChar(val.charAt(i));
+		// return extended buffer
+		return buf;
+	}
+
+	@Override
+	public ByteBuffer deserialize(ByteBuffer buf, Object target, Field fld) throws Exception {
+		// get string from buffer
+		String val = parseString(buf);
+		// set it to target
+		fld.set(target, val);
+		// return buffer
+		return buf;
+	}
+
+	@Override
+	public void deserialize(Object val, Object target, Field fld) throws Exception {
+		// cast to string
+		String lval = (String) val;
+		// set it to target
+		fld.set(target, lval);		
+	}
+
+	@Override
+	public Object deserialize(ByteBuffer buf) throws Exception {
+		return parseString(buf);
+	}
+
+	@Override
+	public ByteBuffer serialize(ByteBuffer buf, Object target, Field fld) throws Exception {
+		// get field value
+		String val = (String) fld.get(target);
+		// serialise and return buffer
+		return serialise(buf, val);
+	}
+
+	@Override
+	public ByteBuffer serialize(ByteBuffer buf, Object value) throws Exception {
+		// get field value
+		String val = (String) value;
+		// serialise and return buffer
+		return serialise(buf, val);
+	}
+
+	@Override
+	public void skip(ByteBuffer buf) throws Exception {
+		// skip entire string bytes
+		buf.get(); // skip type
+		int len = buf.getInt(); // get string length
+		buf.position(buf.position() + len * 2); // skip entire string		
+	}
+	/**
+	 * 
+	 * @return
+	 */
+	private String getStringValue() {
+		// if already parsed
+		if (pos < 0)
+			return val;
+		// set to the correct buffer position
+		buf.position(pos);
+		// parse string value
+		val = parseString(buf);
+		// indicate parsing is over
+		pos = -1;
+		// return value
 		return val;
-	}
-	
-	@Override
-	public void set(Object target) throws Exception {
-		// set field value now
-		fld.set(target, byteArrayToString());
-	}
-
-	@Override
-	public ByteBuffer get(ByteBuffer buf, Object target) throws Exception {
-		String str = (String) fld.get(target);
-		return stringToByteBuffer(str == null ? "" : str, buf);
-	}
-
-	@Override
-	public ByteBuffer toBytes(ByteBuffer buf, Object value) throws Exception {
-		String str = (String) value;
-		return stringToByteBuffer(str == null ? "" : str, buf);
 	}
 	
 	@Override
 	public Object get() throws Exception {
 		// TODO Auto-generated method stub
-		return byteArrayToString();
+		return getStringValue();
 	}
-
+	
 	@Override
-	public ByteBuffer validateType(ByteBuffer buf, Object target) throws Exception {
-		if (!(target instanceof String))
-			invalidType(fld);
-		String v = (String) target;
-		return stringToByteBuffer(v == null ? "" : v, buf);
+	public void set(Object target, Field fld) throws Exception {
+		// get String value
+		String v = getStringValue();
+		// set String value
+		fld.set(target, v);		
 	}
-
+	
 	@Override
-	public FieldAccessor clone(ByteBuffer buf) throws Exception {
-		// check data validity
-		if (buf.get() != D_TYP_STR)
-			invalidType(fld);
-		// get length of the string
-		int len = buf.getInt();
-		// rewind
-		buf.position(buf.position() - 5);
-		// extract bytes
-		byte[] data = new byte[len * 2 + 5];
-		buf.get(data);
-		// instantiate a new StringAccessor
-		StringFieldAccessor strAccessor = new StringFieldAccessor(fld);
-		strAccessor.val = data;		
-		return strAccessor;
+	public FieldAccessor newInstance() throws Exception {
+		// TODO Auto-generated method stub
+		return new StringFieldAccessor();
 	}	
-
+	
 }

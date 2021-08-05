@@ -14,6 +14,7 @@ import org.junit.Test;
 import org.pp.objectstore.ObjectStoreFactory;
 import org.pp.objectstore.interfaces.ObjectStore;
 import org.pp.qry.interfaces.ObjectIterator;
+import static org.pp.objectstore.test.OrderLine.genOrderLine;
 
 import static org.pp.objectstore.test.OrderLine.dateToMillis;
 
@@ -64,7 +65,7 @@ public class OrderLineTest {
 				"########################################## Create Order Line ########################################");
 		ObjectStore<OrderLine> os = factory.openStore(OrderLine.class);
 		for (int i = 0; i < numOfRecords; i++) {
-			OrderLine ol = OrderLine.genOrderLine();
+			OrderLine ol = genOrderLine();
 			os.store(ol);
 			oList.add(ol);
 		}
@@ -105,9 +106,11 @@ public class OrderLineTest {
 		// order line between dates
 		List<Long> dates = Arrays.asList(dateToMillis("2018-09-29"), dateToMillis("2020-05-11"));
 		ObjectIterator<OrderLine> itr = factory.openStore(OrderLine.class)
-												.createQuery("orderDate between ? && customerEmail = 'pan.moana@gmail.com'")
+												.createQuery("orderDate between ? && customerEmail = 'pan.moana@gmail.com' && (numOfUnits > ? || total < ?)")
 												.setReverseOrder(true)
 												.setParam(dates)
+												.setParam(30)
+												.setParam(500.70d)
 												.iterator();
 		while (itr.hasNext()) {
 			System.out.println(itr.next());

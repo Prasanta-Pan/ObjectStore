@@ -165,7 +165,51 @@ public class OrderLine {
 	public int getVersion() {
 		return version;
 	}
-	
+		
+	public void setOrderDate(long orderDate) {
+		this.orderDate = orderDate;
+	}
+
+	public void setProductId(int productId) {
+		this.productId = productId;
+	}
+
+	public void setLineId(long lineId) {
+		this.lineId = lineId;
+	}
+
+	public void setProductName(String productName) {
+		this.productName = productName;
+	}
+
+	public void setCustomerEmail(String customerEmail) {
+		this.customerEmail = customerEmail;
+	}
+
+	public void setNumOfOrder(int numOfOrder) {
+		this.numOfOrder = numOfOrder;
+	}
+
+	public void setNumOfUnits(int numOfUnits) {
+		this.numOfUnits = numOfUnits;
+	}
+
+	public void setUnitPrice(float unitPrice) {
+		this.unitPrice = unitPrice;
+	}
+
+	public void setTotal(double total) {
+		this.total = total;
+	}
+
+	public void setOrderStatus(boolean orderStatus) {
+		this.orderStatus = orderStatus;
+	}
+
+	public void setVersion(int version) {
+		this.version = version;
+	}
+
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder();

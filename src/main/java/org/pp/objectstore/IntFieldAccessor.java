@@ -1,11 +1,12 @@
 package org.pp.objectstore;
 
-import static org.pp.objectstore.DataTypes.D_TYP_INT;
 import static org.pp.objectstore.Util.extend;
-import static org.pp.objectstore.Util.invalidType;
+import static org.pp.objectstore.interfaces.Constants.D_TYP_INT;
 
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
+
+import org.pp.objectstore.interfaces.FieldAccessor;
 
 /**
  * Int field accessor
@@ -18,73 +19,117 @@ final class IntFieldAccessor extends AbstractFieldAccessor {
 	 * Backing int value
 	 */
 	private int val;
-
+	
 	/**
-	 * Only constructor
-	 * 
-	 * @param fld
+	 * Extract integer value from byte buffer
+	 * @param buf
+	 * @return
 	 */
-	protected IntFieldAccessor(Field fld) {
-		super(fld);
-	}
-
-	// common
-	private ByteBuffer put(ByteBuffer buf, int val) {
-		buf = extend(buf, 5);
-		buf.put(D_TYP_INT);
-		buf.putInt(val);
-		return buf;
-	}
-
-	@Override
-	public ByteBuffer set(ByteBuffer buf, Object target) throws Exception {
+	static final int parseInt(ByteBuffer buf) {
+		// validate type
 		if (buf.get() != D_TYP_INT)
-			invalidType(fld);
-		fld.setInt(target, buf.getInt());
+			throw new RuntimeException("Integer data type was expected");
+		// extract value
+		return buf.getInt();
+	}
+	/**
+	 * Serialise integer value to byte buffer
+	 * @param buf
+	 * @param val
+	 * @return
+	 */
+	static final ByteBuffer serialise(ByteBuffer buf, int val) {
+		// extend buffer if necessary
+		buf = extend(buf, 5);
+		// set type to buffer
+		buf.put(D_TYP_INT);
+		// set value to buffer
+		buf.putInt(val);
+		// return buffer
 		return buf;
 	}
 
 	@Override
-	public void set(Object target) throws Exception {
-		// TODO Auto-generated method stub
+	public ByteBuffer deserialize(ByteBuffer buf, Object target, Field fld) throws Exception {
+		// get integer value
+		int val = parseInt(buf);
+		// set it to target
 		fld.setInt(target, val);
+		// return byte buffer
+		return buf;
 	}
 
 	@Override
-	public ByteBuffer get(ByteBuffer buf, Object target) throws Exception {
+	public void deserialize(Object val, Object target, Field fld) throws Exception {
+		// cast value to integer
+		int lval = (int) val;
+		// set it to target
+		fld.setInt(target, lval);		
+	}
+
+	@Override
+	public Object deserialize(ByteBuffer buf) throws Exception {
+		// get integer and return
+		return parseInt(buf);
+	}
+
+	@Override
+	public ByteBuffer serialize(ByteBuffer buf, Object target, Field fld) throws Exception {
+		// get integer value from target
 		int val = fld.getInt(target);
-		return put(buf, val);
+		// serialise and return buffer		
+		return serialize(buf, val);
 	}
 
 	@Override
-	public ByteBuffer toBytes(ByteBuffer buf, Object value) throws Exception {
-		int newVal = (int) value;
-		return put(buf, newVal);
+	public ByteBuffer serialize(ByteBuffer buf, Object value) throws Exception {
+		// cast to integer value
+		int val = (int) value;
+		// serialise and return buffer		
+		return serialize(buf, val);
 	}
 
+	@Override
+	public void skip(ByteBuffer buf) throws Exception {
+		// skip bytes
+		buf.position(buf.position() + 5);	
+	}
+	/**
+	 * Common get int value
+	 * @return
+	 */
+	private int getIntValue() {
+		// if already parsed
+		if (pos < 0)
+			return val;
+		// set to the correct buffer position
+		buf.position(pos);
+		// parse int value
+		val = parseInt(buf);
+		// indicate parsing is over
+		pos = -1;
+		// return value
+		return val;
+	}
+	
 	@Override
 	public Object get() throws Exception {
 		// TODO Auto-generated method stub
-		return val;
+		return getIntValue();
 	}
-
+	
 	@Override
-	public ByteBuffer validateType(ByteBuffer buf, Object target) throws Exception {
-		if (!(target instanceof Integer))
-			invalidType(fld);
-		int v = (int) target;
-		return put(buf, v);
+	public void set(Object target, Field fld) throws Exception {
+		// get int value
+		int v = getIntValue();
+		// set field value
+		fld.set(target, v);		
 	}
-
+	
 	@Override
-	public FieldAccessor clone(ByteBuffer buf) throws Exception {
+	public FieldAccessor newInstance() throws Exception {
 		// TODO Auto-generated method stub
-		if (buf.get() != D_TYP_INT)
-			invalidType(fld);
-		// create a new instance
-		IntFieldAccessor ifAccessor = new IntFieldAccessor(fld);
-		ifAccessor.val = buf.getInt();
-		return ifAccessor;
-	}
+		return new IntFieldAccessor();
+	}	
 
 }

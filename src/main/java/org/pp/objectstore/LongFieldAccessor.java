@@ -1,11 +1,12 @@
 package org.pp.objectstore;
 
-import static org.pp.objectstore.DataTypes.D_TYP_LNG;
 import static org.pp.objectstore.Util.extend;
-import static org.pp.objectstore.Util.invalidType;
+import static org.pp.objectstore.interfaces.Constants.D_TYP_LNG;
 
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
+
+import org.pp.objectstore.interfaces.FieldAccessor;
 
 /**
  * Long Field accessor
@@ -18,73 +19,117 @@ final class LongFieldAccessor extends AbstractFieldAccessor {
 	 * Backing long value
 	 */
 	private long val;
-
+	
 	/**
-	 * Only constructor
-	 * 
-	 * @param fld
+	 * Extract long value from buffer
+	 * @param buf
+	 * @return
 	 */
-	protected LongFieldAccessor(Field fld) {
-		super(fld);
-	}
-
-	// common
-	private ByteBuffer put(ByteBuffer buf, long val) {
-		buf = extend(buf, 9);
-		buf.put(D_TYP_LNG);
-		buf.putLong(val);
-		return buf;
-	}
-
-	@Override
-	public ByteBuffer set(ByteBuffer buf, Object target) throws Exception {
+	static final long parseLong(ByteBuffer buf) {
+		// validate type
 		if (buf.get() != D_TYP_LNG)
-			invalidType(fld);
-		fld.setLong(target, buf.getLong());
+			throw new RuntimeException("Long data type was expected");
+		// extract value
+		return buf.getLong();
+	}
+	/**
+	 * Serialise long value to byte buffer
+	 * @param buf
+	 * @param val
+	 * @return
+	 */
+	static final ByteBuffer serialise(ByteBuffer buf, long val) {
+		// extend buffer if necessary
+		buf = extend(buf, 9);
+		// set type to buffer
+		buf.put(D_TYP_LNG);
+		// set value to buffer
+		buf.putLong(val);
+		// return buffer
+		return buf;		
+	}
+	
+	@Override
+	public ByteBuffer deserialize(ByteBuffer buf, Object target, Field fld) throws Exception {
+		// extract long value from the buffer
+		long val = parseLong(buf);
+		// set it to target
+		fld.setLong(target, val);
+		// return buffer
 		return buf;
 	}
-
+	
 	@Override
-	public void set(Object target) throws Exception {
-		// TODO Auto-generated method stub
-		fld.setLong(target, val);
+	public void deserialize(Object val, Object target, Field fld) throws Exception {
+		// cast to long
+		long lval = (long) val;
+		// set it to target
+		fld.setLong(target, lval);		
 	}
-
+	
 	@Override
-	public ByteBuffer get(ByteBuffer buf, Object target) throws Exception {
+	public Object deserialize(ByteBuffer buf) throws Exception {
+		// parse long and return
+		return parseLong(buf);
+	}
+	
+	@Override
+	public ByteBuffer serialize(ByteBuffer buf, Object target, Field fld) throws Exception {
+		// get long value from target
 		long val = fld.getLong(target);
-		return put(buf, val);
+		// serialise and return buffer
+		return serialise(buf, val);
 	}
-
+	
 	@Override
-	public ByteBuffer toBytes(ByteBuffer buf, Object value) throws Exception {
-		long newVal = (long) value;
-		return put(buf, newVal);
+	public ByteBuffer serialize(ByteBuffer buf, Object value) throws Exception {
+		// cast to long
+		long val = (long) value;
+		// serialise and return buffer
+		return serialise(buf, val);
 	}
-
+	
+	@Override
+	public void skip(ByteBuffer buf) throws Exception {
+		// skip bytes
+		buf.position(buf.position() + 9);		
+	}		
+	/**
+	 * Common get long value
+	 * @return
+	 */
+	private long getLongValue() {
+		// if already parsed
+		if (pos < 0)
+			return val;
+		// set to the correct buffer position
+		buf.position(pos);
+		// parse long value
+		val = parseLong(buf);
+		// indicate parsing is over
+		pos = -1;
+		// return value
+		return val;
+	}
+	
 	@Override
 	public Object get() throws Exception {
 		// TODO Auto-generated method stub
-		return val;
+		return getLongValue();
 	}
-
+	
 	@Override
-	public ByteBuffer validateType(ByteBuffer buf, Object target) throws Exception {
-		if (!(target instanceof Long))
-			invalidType(fld);
-		long v = (long) target;
-		return put(buf, v);
+	public void set(Object target, Field fld) throws Exception {
+		// get long value
+		long v = getLongValue();
+		// set long value
+		fld.setLong(target, v);		
 	}
-
+	
 	@Override
-	public FieldAccessor clone(ByteBuffer buf) throws Exception {
+	public FieldAccessor newInstance() throws Exception {
 		// TODO Auto-generated method stub
-		if (buf.get() != D_TYP_LNG)
-			invalidType(fld);
-		// create a new instance
-		LongFieldAccessor lfAccessor = new LongFieldAccessor(fld);
-		lfAccessor.val = buf.getLong();
-		return lfAccessor;
+		return new LongFieldAccessor();
 	}
 
 }

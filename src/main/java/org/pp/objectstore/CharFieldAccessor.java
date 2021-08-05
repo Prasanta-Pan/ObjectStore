@@ -2,9 +2,11 @@ package org.pp.objectstore;
 
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
-import static org.pp.objectstore.Util.invalidType;
+
+import static org.pp.objectstore.interfaces.Constants.D_TYP_CHAR;
 import static org.pp.objectstore.Util.extend;
-import static org.pp.objectstore.DataTypes.D_TYP_CHAR;
+
+import org.pp.objectstore.interfaces.FieldAccessor;
 /**
  * Char Field accessor
  * @author prasantsmac
@@ -14,70 +16,115 @@ final class CharFieldAccessor extends AbstractFieldAccessor {
 	/**
 	 * Backing char value
 	 */
-    private char val;
-    /**
-     * Only constructor with associated Filed
-     * @param fld
-     */
-	protected CharFieldAccessor(Field fld) {
-		super(fld);			
-	}
+	private char val;
 	
-	// common
-	private ByteBuffer put(ByteBuffer buf, char val) {
-		buf = extend(buf, 3);
-		buf.put(D_TYP_CHAR);
-		buf.putChar(val);
-		return buf;
-	}
-	
-	@Override
-	public ByteBuffer set(ByteBuffer buf, Object target) throws Exception {
+	/**
+	 * Common parse char method	
+	 * @param buf
+	 * @return
+	 */
+	static final char parseChar(ByteBuffer buf) {
 		if (buf.get() != D_TYP_CHAR)
-			invalidType(fld);
-		fld.setChar(target, buf.getChar());
+			throw new RuntimeException("Char data type was expected");
+		// get char value
+		return buf.getChar();
+	}
+	/**
+	 * Common char serialiser
+	 * @param buf
+	 * @param val
+	 */
+	static final ByteBuffer serialise(ByteBuffer buf, char val) {
+		// extend buffer if necessary
+		buf = extend(buf, 3);
+		// set to type to buffer
+		buf.put(D_TYP_CHAR);
+		// set value to buffer
+		buf.putChar(val);
+		// return buffer
 		return buf;
 	}
-	
+
 	@Override
-	public void set(Object target) throws Exception {
-		// TODO Auto-generated method stub
+	public ByteBuffer deserialize(ByteBuffer buf, Object target, Field fld) throws Exception {
+		// get char value from the buffer
+		char val = parseChar(buf);
+		// set it to target
 		fld.setChar(target, val);
+		return buf;
 	}
 
 	@Override
-	public ByteBuffer get(ByteBuffer buf, Object target) throws Exception {
+	public void deserialize(Object val, Object target, Field fld) throws Exception {
+		// cast to char
+		char lval = (char) val;
+		// set it to target
+		fld.setChar(target, lval);		
+	}
+
+	@Override
+	public Object deserialize(ByteBuffer buf) throws Exception {
+		// get char value and return
+		return parseChar(buf);
+	}
+
+	@Override
+	public ByteBuffer serialize(ByteBuffer buf, Object target, Field fld) throws Exception {
+		// get value from target
 		char val = fld.getChar(target);
-		return put(buf, val);	
+		// serialise and return buffer
+		return serialise(buf, val);
 	}
 
 	@Override
-	public ByteBuffer toBytes(ByteBuffer buf, Object value) throws Exception {
+	public ByteBuffer serialize(ByteBuffer buf, Object value) throws Exception {
+		// cast to char value
 		char val = (char) value;
-		return put(buf, val);	
+		// serialise and return buffer
+		return serialise(buf, val);
+	}
+
+	@Override
+	public void skip(ByteBuffer buf) throws Exception {
+		// skip bytes
+		buf.position(buf.position() + 3);
+	}
+	
+	/**
+	 * Common get char value
+	 * @return
+	 */
+	private char getCharVal() {
+		// if already parsed
+		if (pos < 0)
+			return val;
+		// set to the correct buffer position
+		buf.position(pos);
+		// parse boolean value
+		val = parseChar(buf);
+		// indicate parsing is over
+		pos = -1;
+		// return value
+		return val;
 	}
 	
 	@Override
 	public Object get() throws Exception {
 		// TODO Auto-generated method stub
-		return val + "";
-	}
-
-	@Override
-	public ByteBuffer validateType(ByteBuffer buf, Object target) throws Exception {
-		invalidType(fld);
-	    return null;
+		return getCharVal();
 	}
 	
 	@Override
-	public FieldAccessor clone(ByteBuffer buf) throws Exception {
+	public void set(Object target, Field fld) throws Exception {
+		// get char value
+		char v = getCharVal();
+		// set char value
+		fld.setChar(target, v);
+	}
+	
+	@Override
+	public FieldAccessor newInstance() throws Exception {
 		// TODO Auto-generated method stub
-		if (buf.get() != D_TYP_CHAR)
-			invalidType(fld);
-		// create an instance set value and return
-		CharFieldAccessor charFieldAccessor = new CharFieldAccessor(fld);
-		charFieldAccessor.val = buf.getChar();
-		return charFieldAccessor;
-	}	
-
+		return new CharFieldAccessor();
+	}		
 }
