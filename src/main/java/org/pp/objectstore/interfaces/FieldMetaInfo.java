@@ -1,16 +1,16 @@
 package org.pp.objectstore.interfaces;
+import static org.pp.objectstore.interfaces.Constants.FLD_MOD_SORT_KEY;
 
-import java.lang.reflect.Field;
 /**
  * This class contains Field meta info
  * @author prasantsmac
  *
  */
-public final class FieldMetaInfo {
+public final class FieldMetaInfo implements Cloneable {
 	/**
 	 * Field to be used to get/set values from Object
 	 */
-	private Field fld;
+	private FieldAccessor fa;
 	/**
 	 * Field name
 	 */
@@ -43,9 +43,9 @@ public final class FieldMetaInfo {
 	 * @param fldType
 	 * @param fldModifier
 	 */
-	public FieldMetaInfo(Field fld, String fldName, long fldCode, byte fldType, byte fldModifier) {
+	public FieldMetaInfo(FieldAccessor fa, String fldName, long fldCode, byte fldType, byte fldModifier) {
 		this();
-		this.fld = fld;
+		this.fa = fa;
 		this.fldCode = fldCode;
 		this.fldName = fldName;
 		this.fldType = fldType;
@@ -53,14 +53,19 @@ public final class FieldMetaInfo {
 		this.active = true;
 	}
 
-	public Field getField() {
-		return fld;
+	public FieldAccessor getFieldAccessor() {
+		return fa;
 	}
 
 	public String getFldName() {
-		return fld != null ? fld.getName() : fldName;
+		return fldName != null ? fldName : fa.getField().getName();
 	}
-
+	
+    public FieldMetaInfo setFieldName(String fName) {
+    	this.fldName = fName;
+    	return this;
+    }
+    
 	public long getFldCode() {
 		return fldCode;
 	}
@@ -73,8 +78,9 @@ public final class FieldMetaInfo {
 		return fldModifier;
 	}
 		
-	public void setFldCode(long fldCode) {
+	public FieldMetaInfo setFldCode(long fldCode) {
 		this.fldCode = fldCode;
+		return this;
 	}
 
 	public void setFldModifier(byte fldModifier) {
@@ -87,6 +93,21 @@ public final class FieldMetaInfo {
 
 	public void setActive(boolean active) {
 		this.active = active;
+	}
+	
+	public boolean isKey() {
+		return fldModifier >= FLD_MOD_SORT_KEY ? true : false;
+	}
+	
+	@Override
+	public FieldMetaInfo clone() {
+		try {
+			return new FieldMetaInfo(fa != null ? this.fa.newInstance() : null, 
+									 getFldName(), this.fldCode, this.fldType, this.fldModifier);
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			throw new RuntimeException(e);
+		}
 	}
 
 	@Override
@@ -104,7 +125,7 @@ public final class FieldMetaInfo {
 
 	@Override
 	public String toString() {
-		return "FieldName=" + fldName + "," +
+		return "FieldName=" + getFldName() + "," +
 	           "FieldCode=" + fldCode + "," +
 			   "FieldType=" + fldType + "," +
 	           "FieldModifier=" + fldModifier + "," +

@@ -1,0 +1,16 @@
+// query one
+email = 'pan.moana@gmail.com' && orderDate = '12/04/2021' && (totalOrder > 100.54d || numOfUnits < 10)
+// query 2
+email = 'pan.moana@gmail.com' && (orderDate between ('12/04/2018', '10/05/2021') || (totalOrder > 100.54d || numOfUnits < 10))
+// query 3
+email = 'pan.moana@gmail.com' && orderDate between ('12/04/2018', '10/05/2021') 
+// query 4
+email = 'pan.moana@gmail.com' || recordStatus = 'A'
+// query 5
+orderDate between ('12/04/2018', '10/05/2021') && customerSex = false
+// query 6
+orderDate between ('12/04/2018', '10/05/2021') && (unitPrice > 5.54f || numOfUnits < 5)
+// query 7
+email != 'pan.moana@gmail.com' && orderDate between ('12/04/2018', '10/05/2021')
+// query 8
+email between ('pan.moana@gmail.com', 'pan.maumita@gmail.com') || orderDate between ('12/04/2018', '10/05/2021')

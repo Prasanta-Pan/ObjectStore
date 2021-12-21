@@ -19,6 +19,15 @@ final class CharFieldAccessor extends AbstractFieldAccessor {
 	private char val;
 	
 	/**
+	 * 
+	 * @param fld
+	 */
+	protected CharFieldAccessor(Field fld) {
+		super(fld);
+		// TODO Auto-generated constructor stub
+	}
+	
+	/**
 	 * Common parse char method	
 	 * @param buf
 	 * @return
@@ -46,7 +55,7 @@ final class CharFieldAccessor extends AbstractFieldAccessor {
 	}
 
 	@Override
-	public ByteBuffer deserialize(ByteBuffer buf, Object target, Field fld) throws Exception {
+	public ByteBuffer deserialize(ByteBuffer buf, Object target) throws Exception {
 		// get char value from the buffer
 		char val = parseChar(buf);
 		// set it to target
@@ -55,7 +64,7 @@ final class CharFieldAccessor extends AbstractFieldAccessor {
 	}
 
 	@Override
-	public void deserialize(Object val, Object target, Field fld) throws Exception {
+	public void deserialize(Object val, Object target) throws Exception {
 		// cast to char
 		char lval = (char) val;
 		// set it to target
@@ -69,7 +78,7 @@ final class CharFieldAccessor extends AbstractFieldAccessor {
 	}
 
 	@Override
-	public ByteBuffer serialize(ByteBuffer buf, Object target, Field fld) throws Exception {
+	public ByteBuffer serializeField(ByteBuffer buf, Object target) throws Exception {
 		// get value from target
 		char val = fld.getChar(target);
 		// serialise and return buffer
@@ -115,7 +124,7 @@ final class CharFieldAccessor extends AbstractFieldAccessor {
 	}
 	
 	@Override
-	public void set(Object target, Field fld) throws Exception {
+	public void set(Object target) throws Exception {
 		// get char value
 		char v = getCharVal();
 		// set char value
@@ -125,6 +134,16 @@ final class CharFieldAccessor extends AbstractFieldAccessor {
 	@Override
 	public FieldAccessor newInstance() throws Exception {
 		// TODO Auto-generated method stub
-		return new CharFieldAccessor();
-	}		
+		return new CharFieldAccessor(fld);
+	}
+	
+	@Override
+	public void set(ByteBuffer buf) throws Exception {
+		// save buffer reference
+		this.buf = buf;
+		// save current buffer position
+		this.pos = buf.position();
+		// move position pointer
+		buf.position(this.pos + 3);
+	}
 }

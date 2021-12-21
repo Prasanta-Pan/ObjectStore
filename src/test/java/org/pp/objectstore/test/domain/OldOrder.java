@@ -1,4 +1,4 @@
-package org.pp.objectstore.test;
+package org.pp.objectstore.test.domain;
 
 import java.util.Date;
 
@@ -8,7 +8,7 @@ import org.pp.objectstore.interfaces.SortKey;
 import org.pp.objectstore.interfaces.Version;
 
 @Collection("order")
-public class Order {
+public class OldOrder {
 	// First Sort Key is based on customer email
 	@SortKey(1)
 	private String email;
@@ -28,7 +28,7 @@ public class Order {
 	@Version
 	private int ver;
 
-	public Order() {
+	public OldOrder() {
 	}
 	
     /**
@@ -37,7 +37,7 @@ public class Order {
      * @param oDate
      * @param orderId
      */
-	public Order(String email, long oDate, long orderId) {
+	public OldOrder(String email, long oDate, long orderId) {
 		this.email = email;
 		this.orderDate = oDate;
 		this.orderId = orderId;
@@ -51,12 +51,16 @@ public class Order {
 	 * @param total
 	 * @param orderDate
 	 */
-	public Order(String email, int noOrders, float unitPrice, int total, long orderDate) {
+	public OldOrder(String email, int noOrders, float unitPrice, int total, long orderDate) {
 		this.email = email;
 		this.noOrders = noOrders;
 		this.unitPrice = unitPrice;
 		this.total = total;
 		this.orderDate = orderDate;
+	}
+	
+	public static OldOrder newInstance() {
+		return null;
 	}
 
 	public String getEmail() {
@@ -114,10 +118,11 @@ public class Order {
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
-		return sb.append("email=" + email + ",").append("orderId=" + orderId + ",").append("noOrders=" + noOrders + ",")
-				.append("unitPrice=" + unitPrice + ",").append("total=" + total + ",").append("orderDate=" + new Date(orderDate) + ",")
-				.append("version=" + ver)
-				.toString();
+		return sb.append("email=" + email + ",").append("orderDate=" + new Date(orderDate) + ",")
+				 .append("orderId=" + orderId + ",").append("noOrders=" + noOrders + ",")
+				 .append("unitPrice=" + unitPrice + ",").append("total=" + total + ",")
+				 .append("version=" + ver)
+				 .toString();
 	}
 
 }

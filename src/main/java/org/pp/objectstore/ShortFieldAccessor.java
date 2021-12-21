@@ -19,6 +19,15 @@ final class ShortFieldAccessor extends AbstractFieldAccessor {
 	private short val;
 	
 	/**
+	 * 
+	 * @param fld
+	 */
+	protected ShortFieldAccessor(Field fld) {
+		super(fld);
+		// TODO Auto-generated constructor stub
+	}
+	
+	/**
 	 * Extract short value from buffer
 	 * @param buf
 	 * @return
@@ -48,7 +57,7 @@ final class ShortFieldAccessor extends AbstractFieldAccessor {
 	}
 
 	@Override
-	public ByteBuffer deserialize(ByteBuffer buf, Object target, Field fld) throws Exception {
+	public ByteBuffer deserialize(ByteBuffer buf, Object target) throws Exception {
 		// get short value from buffer
 		short val = parseShort(buf);
 		// set it to target
@@ -58,7 +67,7 @@ final class ShortFieldAccessor extends AbstractFieldAccessor {
 	}
 
 	@Override
-	public void deserialize(Object val, Object target, Field fld) throws Exception {
+	public void deserialize(Object val, Object target) throws Exception {
 		// cast to short
 		short lval = (short) val;
 		// set it to target
@@ -72,11 +81,11 @@ final class ShortFieldAccessor extends AbstractFieldAccessor {
 	}
 
 	@Override
-	public ByteBuffer serialize(ByteBuffer buf, Object target, Field fld) throws Exception {
+	public ByteBuffer serializeField(ByteBuffer buf, Object target) throws Exception {
 		// get short value from the target
 		short val = fld.getShort(target);
 		// serialise and return buffer
-		return serialize(buf, val);
+		return serialise(buf, val);
 	}
 
 	@Override
@@ -84,7 +93,7 @@ final class ShortFieldAccessor extends AbstractFieldAccessor {
 		// cast to short
 		short val = (short) value;
 		// serialise and return buffer
-		return serialize(buf, val);
+		return serialise(buf, val);
 	}
 
 	@Override
@@ -117,7 +126,7 @@ final class ShortFieldAccessor extends AbstractFieldAccessor {
 		return getShortValue();
 	}
 	@Override
-	public void set(Object target, Field fld) throws Exception {
+	public void set(Object target) throws Exception {
 		// get short value
 		short v = getShortValue();
 		// set short value
@@ -127,6 +136,16 @@ final class ShortFieldAccessor extends AbstractFieldAccessor {
 	@Override
 	public FieldAccessor newInstance() throws Exception {
 		// TODO Auto-generated method stub
-		return new ShortFieldAccessor();
+		return new ShortFieldAccessor(null);
 	}	
+	
+	@Override
+	public void set(ByteBuffer buf) throws Exception {
+		// save buffer reference
+		this.buf = buf;
+		// save current buffer position
+		this.pos = buf.position();
+		// move position pointer
+		buf.position(this.pos + 3);
+	}
 }

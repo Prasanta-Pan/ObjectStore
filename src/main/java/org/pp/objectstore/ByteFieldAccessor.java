@@ -21,6 +21,15 @@ final class ByteFieldAccessor extends AbstractFieldAccessor {
 	private byte val;
 	
 	/**
+	 * 
+	 * @param fld
+	 */
+	protected ByteFieldAccessor(Field fld) {
+		super(fld);
+		// TODO Auto-generated constructor stub
+	}
+	
+	/**
 	 * 	Common parsing of byte value
 	 * @param buf
 	 * @return
@@ -50,7 +59,7 @@ final class ByteFieldAccessor extends AbstractFieldAccessor {
 	}
 
 	@Override
-	public ByteBuffer deserialize(ByteBuffer buf, Object target, Field fld) throws Exception {
+	public ByteBuffer deserialize(ByteBuffer buf, Object target) throws Exception {
 		// get byte value from target
 		byte val = parseByte(buf);
 		// set byte value to the target
@@ -60,7 +69,7 @@ final class ByteFieldAccessor extends AbstractFieldAccessor {
 	}
 
 	@Override
-	public void deserialize(Object val, Object target, Field fld) throws Exception {
+	public void deserialize(Object val, Object target) throws Exception {
 		// cast to byte value
 		byte lVal = (byte) val;
 		// set it to target
@@ -73,7 +82,7 @@ final class ByteFieldAccessor extends AbstractFieldAccessor {
 	}
 
 	@Override
-	public ByteBuffer serialize(ByteBuffer buf, Object target, Field fld) throws Exception {
+	public ByteBuffer serializeField(ByteBuffer buf, Object target) throws Exception {
 		// get byte value from the target
 		byte val = fld.getByte(target);
 		// serialise and return buffer
@@ -85,7 +94,7 @@ final class ByteFieldAccessor extends AbstractFieldAccessor {
 		// cast to byte value
 		byte val = (byte) value;
 		// serialise and return
-		return serialize(buf, val);
+		return serialise(buf, val);
 	}
 
 	@Override
@@ -93,6 +102,7 @@ final class ByteFieldAccessor extends AbstractFieldAccessor {
 		// skip bytes
 		buf.position(buf.position() + 2);
 	}
+	
 	/**
 	 * Common method to get value
 	 * @return
@@ -116,17 +126,29 @@ final class ByteFieldAccessor extends AbstractFieldAccessor {
 		// TODO Auto-generated method stub
 		return getByteVal();
 	}
+	
 	@Override
-	public void set(Object target, Field fld) throws Exception {
+	public void set(Object target) throws Exception {
 		// get value
 		byte v = getByteVal();
 		// set value
 		fld.setByte(target, v);
 	}
+	
 	@Override
 	public FieldAccessor newInstance() throws Exception {
 		// TODO Auto-generated method stub
-		return new ByteFieldAccessor();
+		return new ByteFieldAccessor(fld);
+	}
+	
+	@Override
+	public void set(ByteBuffer buf) throws Exception {
+		// save buffer reference
+		this.buf = buf;
+		// save current buffer position
+		this.pos = buf.position();
+		// move position pointer
+		buf.position(this.pos + 2);
 	}
 	
 }

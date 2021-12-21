@@ -15,11 +15,19 @@ public abstract class ObjectStoreFactory {
 	 */
 	private static ObjectStoreFactory osFactory = null;		
 	/**
-	 * Open Object store of class T
+	 * Open or create Object store of class T
 	 * 
 	 * @param <T>
 	 * @param clazz
 	 * @return
+	 */
+	public abstract <T> ObjectStore<T> openOrCreateStore(Class<T> clazz) throws Exception;
+	/**
+	 * Just open store of class clazz
+	 * @param <T>
+	 * @param clazz
+	 * @return
+	 * @throws Exception
 	 */
 	public abstract <T> ObjectStore<T> openStore(Class<T> clazz) throws Exception;
 	/**
@@ -55,6 +63,10 @@ public abstract class ObjectStoreFactory {
 	 * @return
 	 */
 	public abstract boolean isClosed();	
+	/**
+	 * Issue a sync command to underlying storage device
+	 */
+	public abstract void sync() throws Exception ;	
 	/**
 	 * Open ObjectStore factory if not open yet with support for object store caching
 	 * @param uri

@@ -1,5 +1,7 @@
 package org.pp.objectstore.interfaces;
 
+import java.lang.reflect.Field;
+
 import org.pp.objectstore.CacheKey;
 import org.pp.objectstore.CacheValue;
 import org.pp.storagengine.api.KVEngine;
@@ -76,6 +78,13 @@ public interface GlobalObjectStoreContext {
 	 * @return
 	 */
 	public FieldAccessor getFieldAccessor(byte typeCode);
+	/**
+	 * Get a new field accessor
+	 * @param typeCode
+	 * @param fld
+	 * @return
+	 */
+	public FieldAccessor newFieldAccessor(byte typeCode, Field fld);
 	/**
 	 * Get field accessor by instance type
 	 * @param val

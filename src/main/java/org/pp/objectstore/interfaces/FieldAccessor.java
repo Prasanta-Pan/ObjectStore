@@ -12,14 +12,14 @@ public interface FieldAccessor {
 	 * @return
 	 * @throws Exception
 	 */
-	public ByteBuffer deserialize(ByteBuffer buf, Object target, Field fld) throws Exception;
+	public ByteBuffer deserialize(ByteBuffer buf, Object target) throws Exception;
 	/**
 	 * 
 	 * @param val
 	 * @param target
 	 * @param fld
 	 */
-	public void deserialize(Object val, Object target, Field fld) throws Exception ;	
+	public void deserialize(Object val, Object target) throws Exception ;	
 	/**
 	 * DE serialise from byte buffer to proper object
 	 * @param buf
@@ -32,13 +32,19 @@ public interface FieldAccessor {
 	 * @throws Exception
 	 */
 	public Object get() throws Exception;
+	
+	/**
+	 * Get corresponding field object
+	 * @return
+	 */
+	public Field getField();
 	/**
 	 * Set value to target
 	 * @param target
 	 * @param fld
 	 * @throws Exception
 	 */
-	public void set(Object target, Field fld) throws Exception;
+	public void set(Object target) throws Exception;
 	/**
 	 * Get the value from target object and set it to byte buffer
 	 * @param buf
@@ -47,7 +53,7 @@ public interface FieldAccessor {
 	 * @return
 	 * @throws Exception
 	 */
-	public ByteBuffer serialize(ByteBuffer buf, Object target, Field fld) throws Exception;	
+	public ByteBuffer serializeField(ByteBuffer buf, Object target) throws Exception;	
 		
 	/**
 	 * Serialise value to byte buffer

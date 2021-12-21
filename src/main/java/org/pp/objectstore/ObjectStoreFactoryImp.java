@@ -29,6 +29,7 @@ import static org.pp.objectstore.interfaces.Constants.defaultCacheSize;
 import static org.pp.storagengine.api.imp.Util.MB;
 
 import java.lang.ref.SoftReference;
+import java.lang.reflect.Field;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -54,45 +55,37 @@ import org.xerial.snappy.Snappy;
 
 class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectStoreContext {
 	/**
+	 * Factory close indicator
+	 */
+	private volatile boolean close = false;
+	/**
 	 * Key value storage
 	 */
 	private KVEngine kvStore = null;
 	/**
 	 * For atomic updates of objects
 	 */
-	private KeyLocker<Object> kLocker = new KeyLocker<>(64);
+	private KeyLocker<Object> kLocker;
 	/**
 	 * LRU cache for object caching
 	 */
-	private static LRUCache<CacheKey, CacheValue> objCache;
+	private LRUCache<CacheKey, CacheValue> objCache;
 	/**
 	 * Object store cache
 	 */
-	private static ConcurrentMap<String, SoftReference<ObjectStoreImp<?>>> cache = new ConcurrentHashMap<>();
-	/**
-	 * current sequence number
-	 */
-	private static int SEQ = -1;
-	/**
-	 * Max sequence number supported (12 bit)
-	 */
-	private static final int MAX_SEQ = 4095;
-	/**
-	 * Current time in milliseconds
-	 */
-	private static long curTime = System.currentTimeMillis();
+	private ConcurrentMap<String, SoftReference<ObjectStoreImp<?>>> cache;
 	/**
 	 * Supported types
 	 */
-	static final Map<String, Byte> supportedTypes = new HashMap<>();
+	private Map<String, Byte> supportedTypes = new HashMap<>();
 	/**
 	 * Field accessors
 	 */
-	static final FieldAccessor[] accessors = new FieldAccessor[9];
+	private FieldAccessor[] accessors = new FieldAccessor[9];
 	/**
 	 * Initialise supported types
 	 */
-	static {
+	private void init(String dbRoot, Properties props, long cacheSize) throws Exception {
 		// some other non primitive types can be added in future
 		supportedTypes.put("int", D_TYP_INT);
 		supportedTypes.put("long", D_TYP_LNG);
@@ -105,17 +98,46 @@ class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectSt
 		supportedTypes.put("boolean", D_TYP_BOL);
 
 		// initialise field accessors
-		accessors[D_TYP_INT] = new IntFieldAccessor();
-		accessors[D_TYP_LNG] = new LongFieldAccessor();
-		accessors[D_TYP_FLT] = new FloatFieldAccessor();
-		accessors[D_TYP_DBL] = new DoubleFieldAccessor();
-		accessors[D_TYP_SHRT] = new ShortFieldAccessor();
-		accessors[D_TYP_BYTE] = new ByteFieldAccessor();
-		accessors[D_TYP_STR] = new ShortFieldAccessor();
-		accessors[D_TYP_CHAR] = new CharFieldAccessor();
-		accessors[D_TYP_BOL] = new BooleanFieldAccessor();
+		accessors[D_TYP_INT] 
+				= new IntFieldAccessor(null);
+		accessors[D_TYP_LNG] 
+				= new LongFieldAccessor(null);
+		accessors[D_TYP_FLT] 
+				= new FloatFieldAccessor(null);
+		accessors[D_TYP_DBL] 
+				= new DoubleFieldAccessor(null);
+		accessors[D_TYP_SHRT] 
+				= new ShortFieldAccessor(null);
+		accessors[D_TYP_BYTE] 
+				= new ByteFieldAccessor(null);
+		accessors[D_TYP_STR] 
+				= new StringFieldAccessor(null);
+		accessors[D_TYP_CHAR] 
+				= new CharFieldAccessor(null);
+		accessors[D_TYP_BOL] 
+				= new BooleanFieldAccessor(null);
+		
+		// initialise KVEngine first
+		kvStore = new KVEngineImp(dbRoot, props, new ObjectStoreComparator());
+		// initialise cache
+		objCache = new LRUCache<>(MB, cacheSize);
+		// initialise key locker
+		kLocker = new KeyLocker<>(64);
+		// initialise store cache
+		cache = new ConcurrentHashMap<>();
 	}
-
+	
+	/**
+	 * Check if factory was closed already
+	 * @return
+	 */
+	final boolean checkStatus() {
+		boolean status = close;
+		if (status)
+			throw new RuntimeException("Object factory closed already");
+		return !status;
+	}	
+	
 	/**
 	 * Create singleton ObjectStoreFactory
 	 * 
@@ -135,16 +157,15 @@ class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectSt
 				String DB_ROOT = uri.getPath();
 				// Get system properties
 				Properties props = System.getProperties();
-				// Create or open Database
-				kvStore = new KVEngineImp(DB_ROOT, props, new ObjectStoreComparator());
+				// initialise factory
+				init(DB_ROOT, props, cacheSize);
 				break;
 			case "tcp":
 				throw new RuntimeException("TCP scheme/protocol currently not supported");
 			default:
 				throw new RuntimeException("Unsupported scheme/protocole : " + uri.getScheme());
-		}
-		// initialise cache
-		objCache = new LRUCache<>(MB, cacheSize);
+		}		
+		
 	}
     /**
      * Migrate store 
@@ -152,6 +173,8 @@ class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectSt
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	@Override
 	public <T> void migrateStore(Class<T> clazz, StoreDataHandler<T> hdlr) throws Exception {
+		// ensure factory was not closed
+		checkStatus();
 		// validate class and get collection name
 		String name = validateClassName(clazz);
 		// store handler must not be null
@@ -166,7 +189,7 @@ class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectSt
 			ObjectStoreImp osCx = (ref != null) ? ref.get() : null;
 			//
 			if (osCx != null)
-				throw new RuntimeException("Can not redefine sore when store already in use");
+				throw new RuntimeException("Can not migrate sore when store already in use");
 			// build store key
 			byte[] storeKey = buildKeyFindStore(name);
 			// load store meta info
@@ -195,9 +218,7 @@ class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectSt
 			// now instantiate old store context
 			ObjectStoreImp oldStore = new ObjectStoreImp(smInfo, this);
 			// migrate store
-			ObjectStoreImp.migrate(newStore, oldStore, hdlr);
-			// purge old store
-			ObjectStoreImp.purgeStore(oldStore, null);
+			ObjectStoreImp.migrate(oldStore, newStore, hdlr);
 			// set new store code
 			smInfo.setStoreCode(smInfo.getNewStoreCode());
 			// set store status to active
@@ -213,6 +234,8 @@ class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectSt
      */
 	@Override
 	public <T> void renameStoreFields(Class<T> clazz, FieldRenameHandler fh) throws Exception {
+		// ensure factory was not closed
+		checkStatus();
 		// validate class and get collection name
 		String name = validateClassName(clazz);
 		// validate handler, handler can not be null
@@ -258,6 +281,8 @@ class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectSt
 	 * Purge existing source
 	 */
 	public <T> void purgeStore(Class<T> clazz, PurgeStoreHandler hdlr) throws Exception {
+		// ensure factory was not closed
+		checkStatus();
 		// validate class and get collection name
 		String name = validateClassName(clazz);
 		// lock the store
@@ -302,7 +327,9 @@ class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectSt
 
 	@SuppressWarnings("unchecked")
 	@Override
-	public <T> ObjectStore<T> openStore(Class<T> clazz) throws Exception {
+	public <T> ObjectStore<T> openOrCreateStore(Class<T> clazz) throws Exception {
+		// ensure factory was not closed
+		checkStatus();
 		// validate class and get collection name
 		String name = validateClassName(clazz);
 		// object store context
@@ -321,17 +348,22 @@ class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectSt
 				StoreMetaInfo smInfo = loadStoreMeta(osKey, clazz);
 				// check if the store is accessible
 				checkStatus(smInfo);
+				// if the store need to be created first time
+				boolean newStore = false;
 				// store doesn't exist, create a new one
 				if (smInfo == null) {
 					// generate store code
 					long storeCode = genId();
 					// create new store meta info object
-					smInfo = new StoreMetaInfo(name, clazz, storeCode, 0, STORE_STATUS_ACTIVE);
-					// persist store info
-					createOrUpdateStore(osKey, smInfo);
+					smInfo = new StoreMetaInfo(name, clazz, storeCode, 0, STORE_STATUS_ACTIVE);		
+					// indicate new store created
+					newStore = true;
 				}
 				// create new Object Store context
 				osCtx = new ObjectStoreImp<>(smInfo, this, null);
+				// check if first time
+				if (newStore) 
+					createOrUpdateStore(osKey, smInfo);
 				// remove empty reference
 				if (ref != null)
 					cache.remove(name, ref);
@@ -343,6 +375,46 @@ class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectSt
 			unlock(name);
 		}
 		//
+		return (ObjectStore<T>) osCtx;
+	}
+	
+	@SuppressWarnings("unchecked")
+	@Override
+	public <T> ObjectStore<T> openStore(Class<T> clazz) throws Exception {
+		// ensure factory was not closed
+		checkStatus();
+		// validate class and get collection name
+		String name = validateClassName(clazz);
+		// object store context
+		ObjectStoreImp<?> osCtx;
+		// lock store name
+		lock(name);
+		try {
+			// get object store reference
+			SoftReference<ObjectStoreImp<?>> ref = cache.get(name);
+			osCtx = (ref != null) ? ref.get() : null;
+			// create new instance
+			if (osCtx == null) {
+				// build find store key
+				byte[] osKey = buildKeyFindStore(name);
+				// create or load store
+				StoreMetaInfo smInfo = loadStoreMeta(osKey, clazz);
+				// if store don't exist
+				if (smInfo == null)
+					throw new RuntimeException("Object store '" + name + "' doesn't exist");
+				// check if the store is accessible
+				checkStatus(smInfo);
+				// create new Object Store context
+				osCtx = new ObjectStoreImp<>(smInfo, this, null);
+				// remove empty reference
+				if (ref != null)
+					cache.remove(name, ref);
+				// put store in cache
+				cache.put(name, new SoftReference<>(osCtx));
+			}
+		} finally {
+			unlock(name);
+		}
 		return (ObjectStore<T>) osCtx;
 	}
 
@@ -393,11 +465,13 @@ class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectSt
 		// store Meta info
 		StoreMetaInfo storeMeta = null;
 		// Fetch Object store meta info now
-		KVEntry entry = kvStore.get(key);
+		KVEntry entry = getKVEngine().get(key);
 		// if record exist
 		if (entry != null) {
 			// Get byte buffer from the key
 			ByteBuffer buf = ByteBuffer.wrap(entry.getKey());
+			// move position to the start of store name
+			buf.position(STORE_NAMES_META_LEN);
 			// extract Store name from the key
 			String storeName = parseString(buf);
 			// remaining fields from the value
@@ -448,7 +522,7 @@ class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectSt
 			buf = serialise(buf, smInfo.getNewStoreCode());
 		}
 		// persist store info now
-		kvStore.put(key, extract(buf));
+		getKVEngine().put(key, extract(buf));
 		// make a sync
 		getKVEngine().sync();
 		// return store code
@@ -458,31 +532,31 @@ class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectSt
 	@Override
 	public KVEngine getKVEngine() {
 		// TODO Auto-generated method stub
-		return kvStore;
+		return checkStatus() ? kvStore : null;
 	}
 
 	@Override
 	public CacheValue put(CacheKey key, CacheValue value) {
 		// TODO Auto-generated method stub
-		return objCache.put(key, value);
+		return checkStatus() ? objCache.put(key, value) : null;	
 	}
 
 	@Override
 	public CacheValue putIfAbsent(CacheKey key, CacheValue value) {
 		// TODO Auto-generated method stub
-		return objCache.putIfAbsent(key, value);
+		return checkStatus() ? objCache.putIfAbsent(key, value) : null;
 	}
 
 	@Override
 	public CacheValue get(CacheKey key) {
 		// TODO Auto-generated method stub
-		return objCache.get(key);
+		return checkStatus() ? objCache.get(key) : null;
 	}
 
 	@Override
 	public CacheValue remove(CacheKey key) {
 		// TODO Auto-generated method stub
-		return objCache.remove(key);
+		return checkStatus() ? objCache.remove(key) : null;
 	}
 
 	@Override
@@ -569,24 +643,9 @@ class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectSt
 	}
 
 	@Override
-	@SuppressWarnings("static-access")
-	public synchronized long genId() {
-		// if exceed MAX sequence reset to 0
-		if (++SEQ > MAX_SEQ) {
-			long tmp = curTime;
-			// in case number is running too fast
-			while (tmp == (curTime = System.currentTimeMillis())) {
-				try {
-					// sleep 1 millisecond
-					Thread.currentThread().sleep(1);
-				} catch (InterruptedException e) {
-					throw new RuntimeException(e);
-				}
-			}
-			SEQ = 0;
-		}
+	public long genId() {
 		// generate and return ID
-		return curTime << 12 | 0x7fffffffffffffffL & SEQ;
+		return Util.genId();
 	}
 
 	@Override
@@ -610,7 +669,7 @@ class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectSt
 			// get corresponding field accessor
 			FieldAccessor fa = getFieldAccessor(obj);
 			// serialise
-			fa.serialize(buf, obj);
+			buf = fa.serialize(buf, obj);
 		}
 		// check key size
 		if (buf.position() > MAX_KEY_SIZE)
@@ -622,18 +681,54 @@ class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectSt
 	@Override
 	public synchronized void close() throws Exception {
 		// clean up resources
-		if (kvStore != null) {
+		if (!close) {
+			close = true;
 			kvStore.close();
-			kvStore = null;
 			cache.clear();
+			objCache.clear();
 			cache = null;
 			objCache = null;
+			kvStore = null;
 		}
 	}
 	
 	@Override
 	public synchronized boolean isClosed() {
 		// TODO Auto-generated method stub
-		return kvStore != null ? false : true;
+		return !close ? false : true;
 	}
+
+	@Override
+	public void sync() throws Exception {
+		// TODO Auto-generated method stub
+		getKVEngine().sync();
+	}
+
+	@Override
+	public FieldAccessor newFieldAccessor(byte typeCode, Field fld) {
+		// TODO Auto-generated method stub
+		switch (typeCode) {
+			case D_TYP_INT 	:
+		         return new IntFieldAccessor(fld);
+			case D_TYP_LNG 	:
+				return new LongFieldAccessor(fld);
+			case D_TYP_FLT 	:
+				return new FloatFieldAccessor(fld);
+			case D_TYP_DBL 	:
+				return new DoubleFieldAccessor(fld);
+			case D_TYP_SHRT :
+				return new ShortFieldAccessor(fld);
+			case D_TYP_BYTE :
+				return new ByteFieldAccessor(fld);
+			case D_TYP_STR	:
+				return new StringFieldAccessor(fld);
+			case D_TYP_CHAR :
+				return new CharFieldAccessor(fld);
+			case D_TYP_BOL 	:
+				return new BooleanFieldAccessor(fld);
+			default			:
+				throw new RuntimeException("Unsupported type code");			
+		}
+	}
+	
 }

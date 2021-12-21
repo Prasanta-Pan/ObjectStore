@@ -20,6 +20,15 @@ final class FloatFieldAccessor extends AbstractFieldAccessor {
 	 */
 	private float val;
 	
+	/**
+	 * 
+	 * @param fld
+	 */
+	protected FloatFieldAccessor(Field fld) {
+		super(fld);
+		// TODO Auto-generated constructor stub
+	}
+	
     /**
      * 	Extract float value from the byte buffer
      * @param buf
@@ -50,7 +59,7 @@ final class FloatFieldAccessor extends AbstractFieldAccessor {
 	}
 	
 	@Override
-	public ByteBuffer deserialize(ByteBuffer buf, Object target, Field fld) throws Exception {
+	public ByteBuffer deserialize(ByteBuffer buf, Object target) throws Exception {
 		// get float value
 		float val = parseFloat(buf);
 		// set to target
@@ -60,7 +69,7 @@ final class FloatFieldAccessor extends AbstractFieldAccessor {
 	}
 	
 	@Override
-	public void deserialize(Object val, Object target, Field fld) throws Exception {
+	public void deserialize(Object val, Object target) throws Exception {
 		// cast to float
 		float lval = (float) val;
 		// set to target
@@ -74,7 +83,7 @@ final class FloatFieldAccessor extends AbstractFieldAccessor {
 	}
 	
 	@Override
-	public ByteBuffer serialize(ByteBuffer buf, Object target, Field fld) throws Exception {
+	public ByteBuffer serializeField(ByteBuffer buf, Object target) throws Exception {
 		// get value from target
 		float val = fld.getFloat(target);
 		// serialise and return buffer
@@ -119,7 +128,7 @@ final class FloatFieldAccessor extends AbstractFieldAccessor {
 		return getFloatValue();
 	}
 	@Override
-	public void set(Object target, Field fld) throws Exception {
+	public void set(Object target) throws Exception {
 		// get float value
 		float v = getFloatValue();
 		// set float value
@@ -129,7 +138,16 @@ final class FloatFieldAccessor extends AbstractFieldAccessor {
 	@Override
 	public FieldAccessor newInstance() throws Exception {
 		// TODO Auto-generated method stub
-		return null;
+		return new FloatFieldAccessor(fld);
 	}	
 
+	@Override
+	public void set(ByteBuffer buf) throws Exception {
+		// save buffer reference
+		this.buf = buf;
+		// save current buffer position
+		this.pos = buf.position();
+		// move position pointer
+		buf.position(this.pos + 5);
+	}
 }

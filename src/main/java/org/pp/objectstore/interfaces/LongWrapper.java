@@ -39,4 +39,9 @@ public final class LongWrapper {
 		}
 		return false;
 	}
+	
+	@Override
+	public String toString() {
+		return val + "";
+	}
 }

@@ -12,3 +12,25 @@
 5. create a new store
 6. 
 
+############## TODO (As of 7th August 2021) #################
+1. no hard removal of fields.
+2. Can consider to persist version field in store. than compare status with class version
+3. 
+
+{6675308838547474=FieldName=age,FieldCode=6675308838547474,FieldType=0,FieldModifier=-128,Active=true, 
+6675308838547475=FieldName=email,FieldCode=6675308838547475,FieldType=2,FieldModifier=-128,Active=true, 
+6675308838547472=FieldName=active,FieldCode=6675308838547472,FieldType=5,FieldModifier=-128,Active=true, 
+6675308838547473=FieldName=addr,FieldCode=6675308838547473,FieldType=2,FieldModifier=-128,Active=true, 
+6675308838547470=FieldName=contact,FieldCode=6675308838547470,FieldType=1,FieldModifier=-128,Active=true, 
+6675308838547471=FieldName=name,FieldCode=6675308838547471,FieldType=2,FieldModifier=-128,Active=true, 
+6675308838547468=FieldName=wealth,FieldCode=6675308838547468,FieldType=3,FieldModifier=-128,Active=true, 
+6675308838547469=FieldName=gender,FieldCode=6675308838547469,FieldType=8,FieldModifier=-128,Active=true}
+
+{6675308838547462=FieldName=active,FieldCode=6675308838547462,FieldType=5,FieldModifier=-128,Active=true, 
+6675308838547463=FieldName=addr,FieldCode=6675308838547463,FieldType=2,FieldModifier=-128,Active=true, 
+6675308838547460=FieldName=contact,FieldCode=6675308838547460,FieldType=1,FieldModifier=-128,Active=true, 
+6675308838547461=FieldName=name,FieldCode=6675308838547461,FieldType=2,FieldModifier=-128,Active=true, 
+6675308838547458=FieldName=wealth,FieldCode=6675308838547458,FieldType=3,FieldModifier=-128,Active=true, 
+6675308838547459=FieldName=gender,FieldCode=6675308838547459,FieldType=8,FieldModifier=-128,Active=true, 
+6675308838547464=FieldName=age,FieldCode=6675308838547464,FieldType=0,FieldModifier=-128,Active=true, 
+6675308838547465=FieldName=email,FieldCode=6675308838547465,FieldType=2,FieldModifier=-128,Active=true}

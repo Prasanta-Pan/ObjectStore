@@ -17,9 +17,14 @@ final class BooleanFieldAccessor extends  AbstractFieldAccessor {
 	 * Backing boolean value
 	 */
 	private boolean val;
+		
+	protected BooleanFieldAccessor(Field fld) {
+		super(fld);
+		// TODO Auto-generated constructor stub
+	}
 	
    	@Override
-	public ByteBuffer deserialize(ByteBuffer buf, Object target, Field fld) throws Exception {
+	public ByteBuffer deserialize(ByteBuffer buf, Object target) throws Exception {
 		// extract boolean value
 		boolean val = parseBoolean(buf);
 		// set boolean field
@@ -29,7 +34,7 @@ final class BooleanFieldAccessor extends  AbstractFieldAccessor {
 	}
 
 	@Override
-	public void deserialize(Object val, Object target, Field fld) throws Exception {
+	public void deserialize(Object val, Object target) throws Exception {
 		// TODO Auto-generated method stub
 		boolean lVal  = (boolean) val;
 		// set boolean field
@@ -76,11 +81,11 @@ final class BooleanFieldAccessor extends  AbstractFieldAccessor {
 	}
 
 	@Override
-	public ByteBuffer serialize(ByteBuffer buf, Object target, Field fld) throws Exception {
+	public ByteBuffer serializeField(ByteBuffer buf, Object target) throws Exception {
 		// retrieve boolean value from target
 		boolean val = fld.getBoolean(target);
 		// serialise boolean
-		return serialize(buf, val);
+		return serialise(buf, val);
 	}
 
 	@Override
@@ -88,7 +93,7 @@ final class BooleanFieldAccessor extends  AbstractFieldAccessor {
 		// TODO Auto-generated method stub
 		boolean lVal  = (boolean) value;
 		// serialise boolean
-		return serialize(buf, lVal);
+		return serialise(buf, lVal);
 	}	
 
 	@Override
@@ -121,7 +126,7 @@ final class BooleanFieldAccessor extends  AbstractFieldAccessor {
 	}
 
 	@Override
-	public void set(Object target, Field fld) throws Exception {
+	public void set(Object target) throws Exception {
 		// get boolean value
 		boolean v = getBoolVal();
 		// set boolean
@@ -131,6 +136,16 @@ final class BooleanFieldAccessor extends  AbstractFieldAccessor {
 	@Override
 	public FieldAccessor newInstance() throws Exception {
 		// TODO Auto-generated method stub
-		return new BooleanFieldAccessor();
+		return new BooleanFieldAccessor(fld);
+	}
+
+	@Override
+	public void set(ByteBuffer buf) throws Exception {
+		// save buffer reference
+		this.buf = buf;
+		// save current buffer position
+		this.pos = buf.position();
+		// move position pointer
+		buf.position(this.pos + 2);
 	}
 }

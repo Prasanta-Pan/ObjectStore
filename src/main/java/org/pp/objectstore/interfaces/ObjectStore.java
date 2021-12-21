@@ -77,13 +77,4 @@ public interface ObjectStore<T> {
 	 */
 	public Query<T> createQuery(String qry);
 	
-	/**
-	 * Issue a sync command to underlying store device
-	 */
-	public void sync();
-	
-	/**
-	 * Close object store
-	 */
-	public void close();	
 }

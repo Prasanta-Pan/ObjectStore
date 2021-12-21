@@ -1,5 +1,6 @@
 package org.pp.objectstore;
 
+import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 
 import org.pp.objectstore.interfaces.FieldAccessor;
@@ -13,11 +14,17 @@ abstract class AbstractFieldAccessor implements FieldAccessor {
 	 * Position in the byte array
 	 */
 	protected int pos;
+	/**
+	 * Corresponding field object
+	 */
+	protected Field fld;
 	
 	/**
 	 * 
 	 */
-	protected AbstractFieldAccessor() { }
+	protected AbstractFieldAccessor(Field fld) { 
+		this.fld = fld;
+	}
 	
 	/**
 	 * Set both variables
@@ -30,9 +37,8 @@ abstract class AbstractFieldAccessor implements FieldAccessor {
 	}
 	
 	@Override
-	public void set(ByteBuffer buf) throws Exception {
-		// TODO Auto-generated method stub
-		pos = buf.position();
-		this.buf = buf;
-	}	
+	public Field getField() {
+		return fld;
+	}
+		
 }

@@ -30,9 +30,9 @@ public final class Constants {
 	 */
 	public static final byte FLD_MOD_GEN 		
 								= -128; // Field with no modifier
-	public static final byte FLD_MOD_SORT_KEY 	
-								= -127; // SortKey Field
 	public static final byte FLD_MOD_VERSION 	
+								= -127; // SortKey Field
+	public static final byte FLD_MOD_SORT_KEY 	
 								= -126; // Version field
 	public static final byte FLD_MOD_ID 		
 								= -125; // ID field

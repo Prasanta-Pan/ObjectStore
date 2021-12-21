@@ -21,6 +21,15 @@ final class DoubleFieldAccessor extends AbstractFieldAccessor {
 	private double val;
 	
 	/**
+	 * 
+	 * @param fld
+	 */
+	protected DoubleFieldAccessor(Field fld) {
+		super(fld);
+		// TODO Auto-generated constructor stub
+	}
+	
+	/**
 	 * Extract double value from byte buffer
 	 * @param buf
 	 * @return
@@ -51,7 +60,7 @@ final class DoubleFieldAccessor extends AbstractFieldAccessor {
 	}
 
 	@Override
-	public ByteBuffer deserialize(ByteBuffer buf, Object target, Field fld) throws Exception {
+	public ByteBuffer deserialize(ByteBuffer buf, Object target) throws Exception {
 		// extract value from buffer
 		double val = parseDouble(buf);
 		// set value to target
@@ -61,7 +70,7 @@ final class DoubleFieldAccessor extends AbstractFieldAccessor {
 	}
 
 	@Override
-	public void deserialize(Object val, Object target, Field fld) throws Exception {
+	public void deserialize(Object val, Object target) throws Exception {
 		// cast to double
 		double lval = (double) val;
 		// set value to target
@@ -75,11 +84,11 @@ final class DoubleFieldAccessor extends AbstractFieldAccessor {
 	}
 
 	@Override
-	public ByteBuffer serialize(ByteBuffer buf, Object target, Field fld) throws Exception {
+	public ByteBuffer serializeField(ByteBuffer buf, Object target) throws Exception {
 		// get double value from the target
 		double val = fld.getDouble(target);
 		// serialise and return buffer
-		return serialize(buf, val);
+		return serialise(buf, val);
 	}
 
 	@Override
@@ -87,7 +96,7 @@ final class DoubleFieldAccessor extends AbstractFieldAccessor {
 		// cast to double
 		double val = (double) value;
 		// serialise and return buffer
-		return serialize(buf, val);
+		return serialise(buf, val);
 	}
 
 	@Override
@@ -120,7 +129,7 @@ final class DoubleFieldAccessor extends AbstractFieldAccessor {
 	}
 
 	@Override
-	public void set(Object target, Field fld) throws Exception {
+	public void set(Object target) throws Exception {
 		// get double value
 		double v = getDoubleValue();
 		// set double value
@@ -130,6 +139,16 @@ final class DoubleFieldAccessor extends AbstractFieldAccessor {
 	@Override
 	public FieldAccessor newInstance() throws Exception {
 		// TODO Auto-generated method stub
-		return new DoubleFieldAccessor();
+		return new DoubleFieldAccessor(fld);
+	}
+	
+	@Override
+	public void set(ByteBuffer buf) throws Exception {
+		// save buffer reference
+		this.buf = buf;
+		// save current buffer position
+		this.pos = buf.position();
+		// move position pointer
+		buf.position(this.pos + 9);
 	}
 }

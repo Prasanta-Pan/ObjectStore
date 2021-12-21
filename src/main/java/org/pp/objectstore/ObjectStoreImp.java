@@ -7,8 +7,8 @@ import static org.pp.objectstore.ByteFieldAccessor.parseByte;
 import static org.pp.objectstore.ByteFieldAccessor.serialise;
 import static org.pp.objectstore.LongFieldAccessor.parseLong;
 import static org.pp.objectstore.LongFieldAccessor.serialise;
-import static org.pp.objectstore.StringFieldAccessor.serialise;
 import static org.pp.objectstore.StringFieldAccessor.parseString;
+import static org.pp.objectstore.StringFieldAccessor.serialise;
 import static org.pp.objectstore.Util.extract;
 import static org.pp.objectstore.interfaces.Constants.DATA_SPACE;
 import static org.pp.objectstore.interfaces.Constants.D_TYP_DBL;
@@ -29,12 +29,11 @@ import static org.pp.objectstore.interfaces.Constants.STORE_META_LEN;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -59,7 +58,7 @@ import org.pp.objectstore.interfaces.Version;
 import org.pp.qry.QueryImp;
 import org.pp.qry.interfaces.ObjectIterator;
 import org.pp.qry.interfaces.Query;
-import org.pp.qry.interfaces.QueryContext;
+import org.pp.qry.interfaces.QueryDataProvider;
 import org.pp.storagengine.api.KVEntry;
 import org.pp.storagengine.api.KVIterator;
 /**
@@ -78,7 +77,7 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 	 */
 	final GlobalObjectStoreContext ctx;	
 	/**
-	 * Key list 
+	 * SortKeys & ID list 
 	 */
 	private List<FieldMetaInfo> keys;
 	/**
@@ -117,24 +116,23 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 		// load store field info
 		Object[] fields = loadFieldMetaInfo();
 		// verify sort keys
-		Collection<FieldMetaInfo> coll = verifySortKeys((List<FieldMetaInfo>) fields[0]);
-		// persist sort keys if the store being created first time
+		Collection<FieldMetaInfo> coll = verifySortKeys((List<FieldMetaInfo>) fields[0], fh);
+		// first time, add version field to field list to be persisted
+		if (coll.size() > 0 && ver != null)
+			coll.add(ver);
+		// not first time, than verify
+		else if (coll.size() == 0)
+		   verifyVersion((FieldMetaInfo) fields[1], fh);
+		// persist sort keys and version if the store being created first time
 		addFieldsToStore(coll);
-		// verify version
-		verifyVersion((FieldMetaInfo) fields[1]);
 		// verify rest of the fields
 		coll = verifyGeneralFields((Map<String, FieldMetaInfo>) fields[2], fh);
-		// add version field if need to persist first time
-		if (fields[1] == null && ver != null)
-			coll.add(ver);
 		// persist rest of the fields now
 		addFieldsToStore(coll);
 		// remove fields
 		removeFieldsFromStore(coll);
 		// get field code map
-		cMap = getCodeMap();
-		// make a sync
-		ctx.getKVEngine().sync(); 	
+		cMap = getCodeMap();			
     }  
     /**
      * Only open store if exist
@@ -193,8 +191,10 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 			fld.setAccessible(true);
 			// get the field type
 			byte type = ctx.getTypeCode(tNm);
+			// get new field accessor
+			FieldAccessor fa = ctx.newFieldAccessor(type, fld);
 			// Create a Field Meta object
-			FieldMetaInfo fm = new FieldMetaInfo(fld, null, -1L, type, FLD_MOD_GEN);
+			FieldMetaInfo fm = new FieldMetaInfo(fa, null, -1L, type, FLD_MOD_GEN);
 			// Check @SortKey
 			sk = fld.getAnnotation(SortKey.class);
 			if (sk != null) {
@@ -337,12 +337,12 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 	 * @param classKeyList
 	 * @param storeKeyList
 	 */
-	private Collection<FieldMetaInfo> verifySortKeys(List<FieldMetaInfo> storeKeyList) {
+	private Collection<FieldMetaInfo> verifySortKeys(List<FieldMetaInfo> storeKeyList, FieldRenameHandler fh) {
 		// match both count
 		if (storeKeyList.size() > 0 && keys.size() != storeKeyList.size())
 			throw new RuntimeException("SortKey list coun't missmatch");
 		// add all current fields to set, to be added or removed from store
-		Set<FieldMetaInfo> keySet = new HashSet<>(keys);
+		Set<FieldMetaInfo> keySet = new LinkedHashSet<>(keys);
 		// get iterator of class key list
 		Iterator<FieldMetaInfo> classItr = keys.iterator();
 		// get iterator of store key list
@@ -353,6 +353,8 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 			FieldMetaInfo cmi = classItr.next();
 			// get store field meta
 			FieldMetaInfo smi = storeItr.next();
+			// if field name doesn't match their is a chance field name might have been changed
+			renameField(cmi, smi, fh);
 			// set field code
 			cmi.setFldCode(smi.getFldCode());
 			// compare both 
@@ -364,14 +366,40 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 		// return key set
 		return keySet;
 	}
+	
 	/**
-	 * Verify version fileds
+	 * Verify if field was renamed
+	 * @param cm
+	 * @param sm
+	 * @param fh
+	 * @return
+	 */
+	private FieldMetaInfo renameField(FieldMetaInfo cm, FieldMetaInfo sm, FieldRenameHandler fh) {
+		if (!cm.getFldName().equals(sm.getFldName()) && fh != null) {
+			// get new Field name
+			String newName = fh.newFieldName(sm.getFldName());
+			// verify new name if not null
+			if (newName != null && !newName.equals(cm.getFldName()))
+				throw new RuntimeException("Field name doesn't match '" + newName + "'");
+			// set new field name
+			if (newName != null)
+			   sm.setFieldName(newName);
+		}
+		return sm;
+	}
+	
+	/**
+	 * Verify version field
 	 * @param storeVersion
 	 */
-	private void verifyVersion(FieldMetaInfo storeVersion) {
-		if (storeVersion != ver && ((storeVersion == null || ver == null) || !storeVersion.equals(ver)))
+	private void verifyVersion(FieldMetaInfo storeVersion, FieldRenameHandler fh) {
+		if (storeVersion != ver && 
+			((storeVersion == null || ver == null) || 
+			((storeVersion = renameField(ver, storeVersion, fh)) != null &&
+			 !storeVersion.equals(ver.setFldCode(storeVersion.getFldCode())))))
 				throw new RuntimeException("Version field missmatch");
 	}
+	
 	/**
 	 * Verify general fields
 	 * @param m
@@ -383,23 +411,36 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 		for (Map.Entry<String, FieldMetaInfo> e : m.entrySet()) {
 			// if field was removed from the class
 			FieldMetaInfo mi = fieldSet.remove(e.getKey());
+			// set Field Code
+			if (mi != null) {
+				mi.setFldCode(e.getValue().getFldCode());
+				// verify field signature
+				if (!mi.equals(e.getValue())) {
+					throw new RuntimeException("Field signature doesn't match '" + e.getKey() + "'");
+				}
+			}
 			// if this field was removed or renamed
 			if (mi == null && fh != null) {
 				// if the field was renamed
-				String newField = fh.newFieldName(e.getKey());
+				String newField = fh.newFieldName(	e.getKey());
 				// check if the new name of the field is present or not
-				if (newField != null && !fMap.containsKey(newField))
+				if (newField != null && !fieldSet.containsKey(newField))
 					throw new RuntimeException("New field '" + newField + "' not found in class");
 				// if all good
 				if (newField != null) {
 					// get reference of newly replaced field
-					FieldMetaInfo newFm = fMap.get(newField);
-					// set existing field code to it
+					FieldMetaInfo newFm = fieldSet.get(newField);
+				    // set existing field code to it
 					newFm.setFldCode(e.getValue().getFldCode());
+					// get reference to existing Field Meta
+					FieldMetaInfo eFm = e.getValue();
 					// now verify field signature
-					if (!newFm.equals(e.getValue())) {
+					if (newFm.isActive() != eFm.isActive() || 
+						newFm.getFldType() != eFm.getFldType() ||
+						newFm.getFldModifier() != eFm.getFldModifier()) {
 						throw new RuntimeException("Field signature doesn't match '" + e.getKey() + "'");
 					}
+					continue;
 				}
 			}
 			// mark this field to be deletable
@@ -452,6 +493,7 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 			}				
 		}
 	}
+	
 	/**
 	 * [META_SPACE][STORE_META][STORE-CODE][FIELD-CODE]=[FIELD-NAME][FIELD-TYPE][MODIFIER]
 	 * Remove fields
@@ -540,78 +582,66 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 	@Override
 	public T store(T t, boolean cache) throws Exception {
 		// TODO Auto-generated method stub
-		return save(t, null, cache);
-	}
-	
-	// add + update
-	T save(T t, byte[] eKey, boolean cache) throws Exception {
 		// do null check first
 		if (t == null)
 			throw new NullPointerException("Object to persist can't be null");
-		/**
-		 * If any of the sort key was updated we need to delete the
-		 * the old entry after the new entry was persisted.
-		 * No that these two updates are currently not atomic
-		 */
-		byte[] oldKey = (eKey != null) ? eKey : null ;
-		// build new key	
+		// Decide if it was an update or new addition
+		boolean upd = true;
+		// if id generation is required
+		if (isGen) {
+			// get ID field
+			Field fld = keys.get(keys.size() - 1).getFieldAccessor().getField();
+			// only generate if value is zero
+			if (fld.getLong(t) == 0) {
+				fld.setLong(t, ctx.genId());
+				upd = false;
+			}
+		}
+		// build new key
 		byte[] key = buildKey(t);
 		// create a cache key
 		CacheKey k = new CacheKey(key);
 		// lock key
 		ctx.lock(k);
 		try {
-			// if id generation is required
-			if (isGen) {
-				// get ID field
-				Field fld = keys.get(keys.size() - 1).getField();
-				// only generate if value is zero
-				if (fld.getLong(t) == 0)
-				   fld.setLong(t, ctx.genId());			
-			} 
 			// if versioning is required
 			if (ver != null) {
 				// get the version field reference
-				Field fld = ver.getField();
+				Field fld = ver.getFieldAccessor().getField();
 				// get the version value
 				int newVer = fld.getInt(t);
-				// load raw value
-				byte[] val = load(k, cache);
-				// if value found
-				if (val != null) {
-					// get the existing version number
-					int exVer = extractVersion(val);
-					// if version doen't match throw stale object exception
-					if (exVer != newVer)
-						throw new StaleObjectException(smInfo.getClassName());
+				// if it is update request
+				if (upd) {
+					// load raw value
+					byte[] val = load(k, cache);
+					// if value found
+					if (val != null) {
+						// get the existing version number
+						int exVer = extractVersion(ByteBuffer.wrap(val));
+						// if version doen't match throw stale object exception
+						if (exVer != newVer)
+							throw new StaleObjectException(smInfo.getClassName());
+					}
 				}
 				// increment version number
-				fld.setInt(t, ++newVer);		
-			} 			
+				fld.setInt(t, ++newVer);
+			}
 			// serialise object
 			byte[] value = serializeValue(t);
 			// compress value
 			byte[] cValue = ctx.compress(value);
 			// persist new entry
 			ctx.getKVEngine().put(key, cValue);
-			// if old key different than new key
-			if (oldKey != null && !Arrays.equals(oldKey, key)) {
-				// than remove the old mapping
-				ctx.getKVEngine().delete(oldKey);
-				// evict old entry from cache if present
-				ctx.remove(new CacheKey(oldKey));			
-			}
 			// update cache if required
 			if (cache) {
 				// put in cache if enabled
-				cachePut(k, new CacheValue(value), false);		
+				cachePut(k, new CacheValue(value), false);
 			}
 		} finally {
 			ctx.unlock(k);
-		}		
+		}
 		return t;
 	}
-		
 	/**
 	 * Put it in cache
 	 * @param t
@@ -657,7 +687,7 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 	 * @throws Exception
 	 */
 	private byte[] load(CacheKey key, boolean cache) throws Exception {
-		// check if cache enabled
+		// check if available in cache
 		CacheValue value = cache ? ctx.get(key) : null;
 		// if value not found in cache
 		if (value == null) {
@@ -687,7 +717,8 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 		// do null check first
 		if (t == null)
 			throw new NullPointerException("Object to be removed can't be null");
-		return delete(t, null);		
+		// remove from store and return
+		return delete(t);
 	}
 	
 	/**
@@ -696,10 +727,8 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 	 * @return
 	 * @throws Exception
 	 */
-	public T delete(T t, byte[] key) throws Exception {
-		// build key first
-		if (key == null)
-		   key = buildKey(t);
+	public T delete(T t) throws Exception {
+		byte[] key = buildKey(t);
 		// remove from the KV store
 		ctx.getKVEngine().delete(key);
 		// evict corresponding cache entry if present
@@ -721,9 +750,6 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 
 	@Override
 	public Query<T> createQuery(String qry) {
-		// null query is not allowed
-		if (qry == null)
-			throw new NullPointerException();
 		// return query implementation
 		return new QueryImp<>(qry, new QueryContextImp());
 	}
@@ -770,10 +796,8 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 		buf = serialise(buf, smInfo.getStoreCode());
 		// serialise sort keys and ID now
 		for (FieldMetaInfo mi: keys) {
-			// retrieve field type
-			byte fType = mi.getFldType();
-			// retrieve serialiser and serialise
-			buf = ctx.getFieldAccessor(fType).serialize(buf, target, mi.getField());
+			// serialise field value one by one
+			buf = mi.getFieldAccessor().serializeField(buf, target) ;
 		}
 		// check if key size exceeded
 		if (buf.position() > MAX_KEY_SIZE)
@@ -800,63 +824,33 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 		for (FieldMetaInfo mi : fMap.values()) {
 			// serialise field code first
 			buf = serialise(buf, mi.getFldCode());
-			// get field type
-			byte fType = mi.getFldType();
-			// retrieve serialiser and serialise
-			buf = ctx.getFieldAccessor(fType).serialize(buf, target, mi.getField());
+			// serialise field value
+			buf = mi.getFieldAccessor().serialize(buf, target);
 		}
 		// return serialise data
 		return extract(buf);
 	}
+	
 	/**
-	 * Serialise version property
-	 * @param buf
+	 * Deserialize key first
+	 * @param key
+	 * @param target
 	 * @return
 	 * @throws Exception
 	 */
-	private final ByteBuffer serialiseVersion(ByteBuffer buf, Object target) throws Exception {
-		if (ver != null) {
-			// retrieve serialiser and serialise
-			ctx.getFieldAccessor(ver.getFldType()).serialize(buf, target, ver.getField());
-		}
-		return buf;
+	final T deSerializeKey(byte[] key, T target) throws Exception {
+		// get a byte buffer
+		ByteBuffer buf = ByteBuffer.wrap(key);
+		// skip meta info
+		buf.position(STORE_DATA_LEN);
+		// iterate throw key list
+		for (FieldMetaInfo mi : keys) {
+			// DE serialise value
+			mi.getFieldAccessor().deserialize(buf, target);
+		}		
+		return target;
 	}
 	
-	/**
-	 * De serialise version property
-	 * @param t
-	 * @param buf
-	 * @return
-	 * @throws Exception
-	 */
-	final T deSerializeVersion(T t, Map<String, FieldAccessor> m, ByteBuffer buf) throws Exception {
-		if (ver != null) {
-			// if target specified
-			if (t != null) {
-				// de serialise version value and set it to target
-				ctx.getFieldAccessor(ver.getFldType()).deserialize(buf, t, ver.getField());				
-			} else {
-				// extract value
-				m.get(ver.getFldName()).set(buf);
-			}
-		}
-		return t;
-	}
-	/**
-	 * Extract version number
-	 * @param value
-	 * @return
-	 */
-	int extractVersion(byte[] value) {
-		return ((ByteBuffer) ByteBuffer.wrap(value).position(9)).getInt();
-	}
-	
-    /**
-	 * When key size exceed limit
-	 */
-	static final void keySizeIssue() {
-		throw new RuntimeException("Key size can not be more than " + MAX_KEY_SIZE);
-	}
 	/**
 	 * De-serialise object
 	 * 
@@ -888,31 +882,65 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 				continue;
 			}
 			// deSerialize
-			ctx.getFieldAccessor(mi.getFldType()).deserialize(buf, target, mi.getField());
+			mi.getFieldAccessor().deserialize(buf, target);
 		}
 		return target;
 	}
+	
 	/**
-	 * Deserialize key first
-	 * @param key
-	 * @param target
+	 * Serialise version property
+	 * @param buf
 	 * @return
 	 * @throws Exception
 	 */
-	final T deSerializeKey(byte[] key, T target) throws Exception {
-		// get a byte buffer
-		ByteBuffer buf = ByteBuffer.wrap(key);
-		// skip meta info
-		buf.position(STORE_DATA_LEN);
-		// iterate throw key list
-		for (FieldMetaInfo mi : keys) {
-			// get field accessor
-			FieldAccessor acc = ctx.getFieldAccessor(mi.getFldType());
-			// deserialize value
-			acc.deserialize(buf, target, mi.getField());
-		}		
-		return target;
+	final ByteBuffer serialiseVersion(ByteBuffer buf, Object target) throws Exception {
+		if (ver != null) {
+			// serialise field code first
+			buf = serialise(buf, ver.getFldCode());
+			// serialise field value
+			buf = ver.getFieldAccessor().serialize(buf, target);
+		}
+		return buf;
 	}
+	
+	/**
+	 * De serialise version property
+	 * @param t
+	 * @param buf
+	 * @return
+	 * @throws Exception
+	 */
+	final T deSerializeVersion(T t, Map<String, FieldAccessor> m, ByteBuffer buf) throws Exception {
+		if (ver != null) {
+			// skip field code
+			buf.position(buf.position() + 9);
+			// if target specified
+			if (t != null) {
+				// de serialise version value and set it to target
+				ver.getFieldAccessor().deserialize(buf, t);				
+			} else {
+				// extract value
+				m.get(ver.getFldName()).set(buf);
+			}
+		}
+		return t;
+	}
+	/**
+	 * Extract version number
+	 * @param value
+	 * @return
+	 */
+	int extractVersion(ByteBuffer buf) {
+		return ((ByteBuffer)buf.position(10)).getInt();
+	}
+	
+    /**
+	 * When key size exceed limit
+	 */
+	static final void keySizeIssue() {
+		throw new RuntimeException("Key size can not be more than " + MAX_KEY_SIZE);
+	}
+		
 	/**
 	 * Object map iterator implementation
 	 * @author prasantsmac
@@ -983,14 +1011,21 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 						val = ctx.uncompress(val);
 						// get byte buffer from value
 						buf = ByteBuffer.wrap(val);
-						// iterate throw field
+						// De serialise version property first
+						if (ver != null) {
+							// extract version value
+							int verVal = extractVersion(buf);
+							// put it in map
+							vMap.put(ver.getFldName(), verVal);
+						}
+						// de serialise the rest now
 						while (buf.hasRemaining()) {
-							// get field code
-							long fcode = buf.getLong();
-							// get field meta info
-							FieldMetaInfo fm = cMap.get(lw.setVal(fcode));
+							// parse field code
+							long fc = parseLong(buf);
+							// retrieve field meta info
+							FieldMetaInfo mi = cMap.get(lw.setVal(fc));
 							// field might have been deleted
-							if (fm == null) {
+							if (mi == null) {
 								// we need to skip those bytes
 								int pos = buf.position();
 								// skip bytes
@@ -998,14 +1033,14 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 								continue;
 							}
 							// get field name
-							String fName = fm.getFldName();
+							String fName = mi.getFldName();
 							// get field accessor
-							FieldAccessor fa = ctx.getFieldAccessor(fm.getFldType());
+							FieldAccessor fa = ctx.getFieldAccessor(mi.getFldType());
 							// get field value
 							Object fv = fa.deserialize(buf);
 							// put it in map
 							vMap.put(fName, fv);
-						}
+						}						
 					}
 					return true;
 				}
@@ -1070,21 +1105,16 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 		ObjectIteratorImp(boolean reverse) {
 			// TODO Auto-generated method stub
 			try {
-				// start key and end key
-				byte[] start = null, end = null;
-				// if not reverse iterator
-				if (!reverse) {
-					// get start key
-					end = ctx.buildKey(DATA_SPACE, smInfo.getStoreCode() + 1);
-					// get end key
-					start = ctx.buildKey(DATA_SPACE, smInfo.getStoreCode());
-				}
-				// otherwise
-				else {
-					// get end key
-					end = ctx.buildKey(DATA_SPACE, smInfo.getStoreCode());
-					// get start key
-					start = ctx.buildKey(DATA_SPACE, smInfo.getStoreCode() + 1);
+				// build start key
+				byte[] start = ctx.buildKey(DATA_SPACE, smInfo.getStoreCode());
+				// build end key
+				byte[] end = ctx.buildKey(DATA_SPACE, smInfo.getStoreCode() + 1);
+			    // if reverse iterator
+				if (reverse) {
+					// swap start and stop values
+					byte[] tmp = start;
+					start = end;
+					end = tmp;					
 				}
 				// get KV iterator now
 				itr = ctx.getKVEngine().iterator(start, end, reverse);
@@ -1105,7 +1135,7 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 					// get key reference
 					key = e.getKey();
 					// instantiate a new object
-					t = ((Class<T>) smInfo.getClass()).newInstance();
+					t = ((Class<T>) smInfo.getClazz()).newInstance();
 					// de serialise key first
 					deSerializeKey(key, t);
 					// uncompress value
@@ -1138,7 +1168,7 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 			if (t == null)
 				throw new NoSuchElementException();
 			// delete
-			try { delete(t, key); } catch (Exception e) {
+			try { store(t, true); } catch (Exception e) {
 				throw new RuntimeException(e);
 			}
 			return t;			
@@ -1149,7 +1179,7 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 			if (t == null)
 				throw new NoSuchElementException();
 			// delete
-			try { delete(t, key); } catch (Exception e) {
+			try { delete(t); } catch (Exception e) {
 				throw new RuntimeException(e);
 			}
 			return t;
@@ -1173,7 +1203,7 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 	 *
 	 * @param <T>
 	 */
-	final class QueryContextImp implements QueryContext<T> {
+	final class QueryContextImp implements QueryDataProvider<T> {
 		/**
 	     * KV Iterator
 	     */
@@ -1187,10 +1217,6 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 	     */
 	    int count;
 	   	/**
-		 * If this context supporting object iterator
-		 */
-		boolean iterator = false;
-		/**
 		 * Current loaded value
 		 */
 		byte[] value;
@@ -1201,11 +1227,7 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 		 /**
 	     * Value map
 	     */
-	    Map<String, FieldAccessor> valueMap;
-	    /**
-	     * Key Map
-	     */
-	    Map<String, FieldAccessor> keyMap;
+	    Map<String, FieldMetaInfo> map;
 	    /**
 	     * Help full to prevent auto boxing
 	     */
@@ -1224,14 +1246,15 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 	     */
 	    QueryContextImp() {
 			try {
-				// key fields => Field Accessor
-				keyMap = fieldMetaToAccessor(keys);
-				// value fields => Field Accessor
-				valueMap = fieldMetaToAccessor(fMap.values());
+				 // new field map
+				map = new LinkedHashMap<>();
+				// copy key fields
+				copyFieldMeta(keys);
+				// copy value fields
+				copyFieldMeta(fMap.values());
 				// if version field available
 				if (ver != null) {
-					// add to value map
-					valueMap.put(ver.getFldName(), new IntFieldAccessor());
+					map.put(ver.getFldName(), ver.clone());
 				}
 			} catch (Exception e) {
 				throw new RuntimeException(e);
@@ -1243,18 +1266,12 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 	     * @param fldSet
 	     * @return
 	     */
-	    private Map<String, FieldAccessor> fieldMetaToAccessor(Collection<FieldMetaInfo> fldSet) throws Exception 
-	    {
-	    	// field name => Field Accessor
-	        Map<String, FieldAccessor> fieldAcc = new LinkedHashMap<>();
-	        // iterate throw field meta set and convert to field accessor
+	    private void copyFieldMeta(Collection<FieldMetaInfo> fldSet) throws Exception {
+	    	// Iterate and clone
 	        for (FieldMetaInfo e : fldSet) {
-	        	// get Field Accessor
-	    		FieldAccessor fac = ctx.getFieldAccessor(e.getFldType()).newInstance();
-	    		// set it to map
-	    		fieldAcc.put(e.getFldName(), fac);
-	        }            
-	        return fieldAcc;
+	        	// clone field info
+	    		map.put(e.getFldName(), e.clone());
+	        }	       
 	    }
 	    
 	    /**
@@ -1270,11 +1287,15 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 			ByteBuffer buf = ByteBuffer.wrap(key);
 			// skip meta info
 			buf.position(STORE_DATA_LEN);
-			// iterate over sort keys and ID field accessor
-			for (FieldAccessor fa : keyMap.values()) {
-				// set the backing buffer
-				fa.set(buf);
-			}
+			// get iterator
+			Iterator<FieldMetaInfo> itr = map.values().iterator();
+			// iterate key value pair
+			while (itr.hasNext() && buf.hasRemaining()) {
+				// get entry
+				FieldMetaInfo fm = itr.next();
+				// set buffer to field accessor
+				fm.getFieldAccessor().set(buf);
+			}			
 			// mark that key was loaded
 			keyLoaded = true;
 		} 
@@ -1287,9 +1308,7 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 		private final void valueToMap(byte[] val) throws Exception {
 			// get a byte buffer
 			ByteBuffer buf = ByteBuffer.wrap(val);
-			// de serialise version property first
-		    deSerializeVersion(null, valueMap, buf);
-			// de serialise object		
+			// DE serialise object		
 			while (buf.hasRemaining()) {
 				// parse field code
 				long fc = parseLong(buf);
@@ -1304,43 +1323,22 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 					continue;
 				}		
 				// put this into result map
-				valueMap.get(fn.getFldName()).set(buf);		
+				map.get(fn.getFldName()).getFieldAccessor().set(buf);	
 			}
 			// mark that value was loaded
 			valueLoaded = true;
 		}
-			
-		/**
-		 * Set key map to target field
-		 * @throws Exception
-		 */
-		private final void keyMapToTarget() throws Exception {
-			// get key map iterator
-			Iterator<FieldAccessor> faItr = keyMap.values().iterator();
-			// get key list iterator
-			Iterator<FieldMetaInfo> fmItr = keys.iterator();
-			// iterate together
-			while (faItr.hasNext() && fmItr.hasNext()) {
-				// get field accessor
-				FieldAccessor fa = faItr.next();
-				// get field meta info
-				FieldMetaInfo fm = fmItr.next();
-				// set value to the target
-				fa.set(t, fm.getField());
-			}
-		}
-		
 		/**
 		 * Set value map to target
 		 * @throws Exception
 		 */
-		private final void valueMapToTarget() throws Exception {
+		private final void mapToTarget() throws Exception {
+			// get iterator
+			Iterator<FieldMetaInfo> itr = map.values().iterator();
 			// iterate throw map and convert to object
-			for (Map.Entry<String, FieldAccessor> e : valueMap.entrySet()) {
-				// Get field
-				Field fld = fMap.get(e.getKey()).getField();
-				// get field accessor
-				e.getValue().set(t, fld);
+			while (itr.hasNext()) {
+				// Get field and set value
+				itr.next().getFieldAccessor().set(t);			
 			}
 		}
 		
@@ -1392,25 +1390,29 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 		public Object getFieldValue(String fname) {
 			// TODO Auto-generated method stub
 			try {
-				// check if it was a key field
-				FieldAccessor fa = keyMap.get(fname);
-				// if key fields are not de serialise yet
-				if (fa != null && !keyLoaded) {
-					// load key to map
+				// get the corresponding field meta
+				FieldMetaInfo fm = map.get(fname);
+				// if null throw exception
+				if (fm == null)
+				     throw new RuntimeException("Field '" + fname + "' not valid for class " + smInfo.getClassName());
+				// if not key field
+				if (!fm.isKey()) {
+					// if value not loaded
+					if (!valueLoaded) {
+						// uncompress value first
+						value = ctx.uncompress(value);
+						// convert value bytes to map
+						valueToMap(value);
+					}					
+				} 
+				// if key, and key map is not loaded yet
+				else if (!keyLoaded) {
+					// load key bytes to map
 					keyToMap(key);
 				}
-				// if it was a value field
-				if (fa == null && (fa = valueMap.get(fname)) != null && !valueLoaded) {
-					// uncompress value first
-					value = ctx.uncompress(value);
-					// value bytes to map
-					valueToMap(value);
-				}
-				// if field doesn't exist in class
-				if (fa == null)
-					throw new RuntimeException("Field '" + fname + "' not valid for class " + smInfo.getClassName());
-				// return value
-				return fa.get();				
+				// get field value
+				return fm.getFieldAccessor().get();	
+				// 
 			} catch (Exception e) {
 				throw new RuntimeException(e);
 			}
@@ -1449,36 +1451,34 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 		@SuppressWarnings("unchecked")
 		@Override
 		public T currentRecord() {
-			if (t == null && (keyLoaded || valueLoaded)) {
+			if (t == null) {
+				// check if has next record was called before or not
+				if (key == null)
+					throw new NoSuchElementException();
+				// load target
 				try {
 					// create a new instance
-					t = ((Class<T>) smInfo.getClass()).newInstance();
-					// if no key map was available
+					t = ((Class<T>) smInfo.getClazz()).newInstance();
+					// if key not loaded than load it first
 					if (!keyLoaded) {
-						// de serialise raw key to target
-					   deSerializeKey(key, t);
-					} else {
-						// convert map to field
-						keyMapToTarget();
+						// convert key bytes to map
+						keyToMap(key);						
 					}
-					// if no value map is available
-					if (!valueLoaded) {
+					// if value not loaded
+					else if (!valueLoaded) {
 						// uncompress value first
 						value = ctx.uncompress(value);
-						// de serialise
-						deSerialize(value, t);
-					} else {
-						// convert map to field
-						valueMapToTarget();
-					}
+						// convert value bytes to map
+						valueToMap(value);
+					}					
+					// map - target
+				    mapToTarget();
 					// put it in cache if entry not present already
-					cachePut(new CacheKey(key), new CacheValue(value), true);
+					cachePut(new CacheKey(key), new CacheValue(value), true);					
 				} catch (Exception e) {
 					throw new RuntimeException(e);
 				}
 			}
-			else if (t == null)
-				throw new NoSuchElementException();
 			return t;
 		}
 
@@ -1487,7 +1487,7 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 			if (t == null)
 				throw new NoSuchElementException();
 			// delete
-			try { delete(t, key); } catch (Exception e) {
+			try { delete(t); } catch (Exception e) {
 				throw new RuntimeException(e);
 			}
 			return t;
@@ -1498,7 +1498,7 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 			if (t == null)
 				throw new NoSuchElementException();
 			// update
-			try { save(t, key, true); } catch (Exception e) {
+			try { store(t, true); } catch (Exception e) {
 				throw new RuntimeException(e);
 			}
 			return t;
@@ -1511,28 +1511,18 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 			 */
 			if (itr != null) {
 				itr.close();
-				valueMap.clear();
-				keyMap.clear();
+				map.clear();
 				itr = null;
 				t = null;
-				valueMap = keyMap = null;				
 				System.out.println(count);
 			}
 		}		
 	}
 
-	@Override
-	public void sync() {
-		try {
-			ctx.getKVEngine().sync();
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			throw new RuntimeException(e);
-		}		
-	}
-	
-	@Override
-	public void close() {
+	/**
+	 * To be closed by object factory
+	 */
+	void close() {
 		// TODO Auto-generated method stub		
 	}
 }

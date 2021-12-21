@@ -11,6 +11,44 @@ final class Util {
 	 */
 	private Util() {
 	}
+	
+	/**
+	 * current sequence number
+	 */
+	private static int SEQ = -1;
+	/**
+	 * Max sequence number supported (12 bit)
+	 */
+	private static final int MAX_SEQ = 4095;
+	/**
+	 * Current time in milliseconds
+	 */
+	private static long curTime = System.currentTimeMillis();
+	
+	/**
+	 * Generate unique long id
+	 * @return
+	 */
+	@SuppressWarnings("static-access")
+	static synchronized final long genId() {
+		// if exceed MAX sequence reset to 0
+		if (++SEQ > MAX_SEQ) {
+			long tmp = curTime;
+			// in case number is running too fast
+			while (tmp == (curTime = System.currentTimeMillis())) {
+				try {
+					// sleep 1 millisecond
+					Thread.currentThread().sleep(1);
+				} catch (InterruptedException e) {
+					throw new RuntimeException(e);
+				}
+			}
+			SEQ = 0;
+		}
+		// generate and return ID
+		return curTime << 12 | 0x7fffffffffffffffL & SEQ;
+	}
+	
 	/**
 	 * Copy bytes array
 	 * 
