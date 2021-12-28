@@ -81,17 +81,17 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 	 */
 	private List<FieldMetaInfo> keys;
 	/**
-	 * Filed map (Field name ==> FieldMeta)
+	 * List of genral fields
 	 */
-	private Map<String,FieldMetaInfo> fMap;
+	private List<FieldMetaInfo> genralFields;
 	/**
 	 * Code map (Field code ==> FieldMeta)
 	 */
 	private Map<LongWrapper, FieldMetaInfo> cMap;
 	/**
-	 * if versioning required for the class
+	 * if versioning required
 	 */
-	private FieldMetaInfo ver;
+	private boolean ver;
 	/**
 	 * If Id generation required
 	 */
@@ -117,16 +117,11 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 		Object[] fields = loadFieldMetaInfo();
 		// verify sort keys
 		Collection<FieldMetaInfo> coll = verifySortKeys((List<FieldMetaInfo>) fields[0], fh);
-		// first time, add version field to field list to be persisted
-		if (coll.size() > 0 && ver != null)
-			coll.add(ver);
-		// not first time, than verify
-		else if (coll.size() == 0)
+		// verify version field if not first time
+		if (coll.size() == 0)
 		   verifyVersion((FieldMetaInfo) fields[1], fh);
-		// persist sort keys and version if the store being created first time
-		addFieldsToStore(coll);
 		// verify rest of the fields
-		coll = verifyGeneralFields((Map<String, FieldMetaInfo>) fields[2], fh);
+		coll = verifyGeneralFields((List<FieldMetaInfo>) fields[2], fh);
 		// persist rest of the fields now
 		addFieldsToStore(coll);
 		// remove fields
@@ -149,9 +144,9 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 		// assign key list
 		keys = (List<FieldMetaInfo>) fields[0];
 		// assign version
-		ver = (FieldMetaInfo) fields[1];
+		ver = fields[1] != null ? true : false;
 		// assign rest
-		fMap = (Map<String, FieldMetaInfo>) fields[2];
+		genralFields = (List<FieldMetaInfo>) fields[2];
 		// get code map
 		cMap = getCodeMap();
 	}
@@ -168,8 +163,8 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 		FieldMetaInfo id = null;
 		// Sort keys + 1 ID field
 		FieldMetaInfo[] keys = new FieldMetaInfo[MAX_SORT_KEY];
-		// Hash map to hold all fields
-		Map<String, FieldMetaInfo> m = new HashMap<>();
+		// a linked list of all fields
+		LinkedList<FieldMetaInfo> ll = new LinkedList<>();
 		// get all declared fields of a class
 		Field[] flds = smInfo.getClazz().getDeclaredFields();
 		// iterate over the field and retrieve necessary informations
@@ -194,7 +189,7 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 			// get new field accessor
 			FieldAccessor fa = ctx.newFieldAccessor(type, fld);
 			// Create a Field Meta object
-			FieldMetaInfo fm = new FieldMetaInfo(fa, null, -1L, type, FLD_MOD_GEN);
+			FieldMetaInfo fm = new FieldMetaInfo(fa, fld.getName(), -1L, type, FLD_MOD_GEN);
 			// Check @SortKey
 			sk = fld.getAnnotation(SortKey.class);
 			if (sk != null) {
@@ -221,11 +216,14 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 				if (type != D_TYP_INT)
 					throw new RuntimeException("@Version can only apllied to int field");
 				// more than one version field is not allowed
-				if (ver != null)
+				if (ver)
 					throw new RuntimeException("More than one @Version is not allowed");
 				// assign to version property
 				fm.setFldModifier(FLD_MOD_VERSION);
-				ver = fm;
+				// set version indicator
+				ver = true;
+				// add to list
+				ll.addFirst(fm);
 				continue;
 			}
 			// @Id check
@@ -246,8 +244,8 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 				id = fm;
 				continue;
 			}
-			// add field meta object to map
-			m.put(fld.getName(), fm);
+			// add field to list
+			ll.add(fm);
 		}
 		// check if ID was provided
 		if (id == null)
@@ -264,18 +262,19 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 		nKeys.add(id);
 		// assign key list
 		this.keys = nKeys;
-		// assign field map
-		this.fMap = m;
+		// assign general fields list
+		genralFields = ll;		
 	}
 	
 	/**
+	 * Key format [META_SPACE][STORE_META][STORE-CODE][FIELD-CODE]=[FIELD-NAME][FIELD-TYPE][MODIFIER]
 	 * Load field meta info from store
 	 * @return
 	 * @throws Exception
 	 */
 	private Object[] loadFieldMetaInfo() throws Exception {
 		// General fields
-		Map<String, FieldMetaInfo> gm = new HashMap<>();
+		LinkedList<FieldMetaInfo> gf = new LinkedList<>();
 		// Sort Keys
 		List<FieldMetaInfo> skl = new LinkedList<>();
 		// Version Field
@@ -316,20 +315,21 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 			    	break;
 			    // if general field type
 			    case FLD_MOD_GEN:
-			    	gm.put(fieldName, mi);
+			    	gf.add(mi);
 			    	break;
 			   // if version field
 			    case FLD_MOD_VERSION :
 			    	if (lVer != null)
 			    		throw new RuntimeException("More than one version field");
-			      lVer = mi;
+			    	// add to list
+			    	gf.addFirst(lVer = mi);
 			      break;
 			    default :
 			    	  throw new RuntimeException("Unknown field modifier");
 			}			
 		}
 		// return SortKey List, Version, Field map
-		return new Object[] { skl, lVer, gm};
+		return new Object[] { skl, lVer, gf};
 	}
 	
 	/**
@@ -392,11 +392,18 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 	 * Verify version field
 	 * @param storeVersion
 	 */
-	private void verifyVersion(FieldMetaInfo storeVersion, FieldRenameHandler fh) {
-		if (storeVersion != ver && 
-			((storeVersion == null || ver == null) || 
-			((storeVersion = renameField(ver, storeVersion, fh)) != null &&
-			 !storeVersion.equals(ver.setFldCode(storeVersion.getFldCode())))))
+	private void verifyVersion(FieldMetaInfo sVer, FieldRenameHandler fh) {
+		/**
+		 * Class version field
+		 */
+		FieldMetaInfo lVer = ver ? genralFields.get(0) : null;
+		/**
+		 * Compare both version fields
+		 */
+		if (sVer != lVer && 
+			((sVer == null || lVer == null) || 
+			((sVer = renameField(lVer, sVer, fh)) != null &&
+			 !sVer.equals(lVer.setFldCode(sVer.getFldCode())))))
 				throw new RuntimeException("Version field missmatch");
 	}
 	
@@ -404,52 +411,85 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 	 * Verify general fields
 	 * @param m
 	 */
-	private Collection<FieldMetaInfo> verifyGeneralFields(Map<String, FieldMetaInfo> m, FieldRenameHandler fh) {
-		// add all fields to map
-		Map<String, FieldMetaInfo> fieldSet = new HashMap<>(fMap);
-		// iterate through stored fields
-		for (Map.Entry<String, FieldMetaInfo> e : m.entrySet()) {
-			// if field was removed from the class
-			FieldMetaInfo mi = fieldSet.remove(e.getKey());
-			// set Field Code
+	private Collection<FieldMetaInfo> verifyGeneralFields(List<FieldMetaInfo> gf, FieldRenameHandler fh) {
+		/**
+		 * Convert class general fields to Hash Map
+		 */	
+		Map<String, FieldMetaInfo> fieldSet = new HashMap<>(genralFields.size());
+		for (FieldMetaInfo fm: genralFields) {
+			/**
+			 * Field Name --> FieldMetaInfo
+			 */
+			fieldSet.put(fm.getFldName(), fm);
+		}		
+		/**
+		 * Iterate through store fields
+		 */		
+		for (FieldMetaInfo e : gf) {
+			/**
+			 * First remove the field field map
+			 */
+			FieldMetaInfo mi = fieldSet.remove(e.getFldName());
+			/**
+			 * If field is present in both store as well as in class...
+			 */
 			if (mi != null) {
-				mi.setFldCode(e.getValue().getFldCode());
-				// verify field signature
-				if (!mi.equals(e.getValue())) {
-					throw new RuntimeException("Field signature doesn't match '" + e.getKey() + "'");
+				/**
+				 * Set field code first...
+				 */
+				mi.setFldCode(e.getFldCode());
+				/**
+				 * Than compare field signature, throw error if miss match
+				 */
+				if (!mi.equals(e)) {
+					throw new RuntimeException("Field signature doesn't match '" + e.getFldName() + "'");
 				}
 			}
-			// if this field was removed or renamed
+			/**
+			 * If the field was removed from the class or renamed
+			 */
 			if (mi == null && fh != null) {
-				// if the field was renamed
-				String newField = fh.newFieldName(	e.getKey());
-				// check if the new name of the field is present or not
-				if (newField != null && !fieldSet.containsKey(newField))
-					throw new RuntimeException("New field '" + newField + "' not found in class");
-				// if all good
+				/**
+				 * Check if field was renamed
+				 */
+				String newField = fh.newFieldName(e.getFldName());
+				/**
+				 * If new field name was available
+				 */
 				if (newField != null) {
-					// get reference of newly replaced field
+					/**
+					 * If new field name not found in class than throw error
+					 */
+					if (!fieldSet.containsKey(newField)) {
+						throw new RuntimeException("New field '" + newField + "' not found in class");
+					}
+					/**
+					 * Get corresponding Field Meta info from class
+					 */
 					FieldMetaInfo newFm = fieldSet.get(newField);
-				    // set existing field code to it
-					newFm.setFldCode(e.getValue().getFldCode());
-					// get reference to existing Field Meta
-					FieldMetaInfo eFm = e.getValue();
-					// now verify field signature
-					if (newFm.isActive() != eFm.isActive() || 
-						newFm.getFldType() != eFm.getFldType() ||
-						newFm.getFldModifier() != eFm.getFldModifier()) {
-						throw new RuntimeException("Field signature doesn't match '" + e.getKey() + "'");
+				    /**
+				     * Assign existing field code to it
+				     */
+					newFm.setFldCode(e.getFldCode());
+					/**
+					 * Compare now, throw error if miss match
+					 */
+					if (newFm.isActive() != e.isActive() || 
+						newFm.getFldType() != e.getFldType() ||
+						newFm.getFldModifier() != e.getFldModifier()) {
+						throw new RuntimeException("Field signature doesn't match '" + e.getFldName() + "'");
 					}
 					continue;
 				}
 			}
-			// mark this field to be deletable
+			/**
+			 * If the field was removed
+			 */
 			if (mi == null) {
-				FieldMetaInfo mie = e.getValue();
 				// mark it ass deleted
-				mie.setActive(false);
+				e.setActive(false);
 				// add it to set
-				fieldSet.put(e.getKey(), mie);
+				fieldSet.put(e.getFldName(), e);
 			}
 		}
 		// return fields to be persisted
@@ -460,12 +500,20 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 	 * @return
 	 */
 	private Map<LongWrapper, FieldMetaInfo> getCodeMap() {
-		Map<LongWrapper, FieldMetaInfo> codeMap = new HashMap<>(fMap.size());
-		for (FieldMetaInfo fm : fMap.values()) {
+		/**
+		 * Convert class fields to Hash Map of Field Code --> Field Meta
+		 */
+		Map<LongWrapper, FieldMetaInfo> codeMap = new LinkedHashMap<>(genralFields.size());
+		for (FieldMetaInfo fm : genralFields) {
+			/**
+			 * Field Code --> Field Meta
+			 */
 			codeMap.put(new LongWrapper(fm.getFldCode()), fm);
 		}
+		// return
 		return codeMap;
 	}
+	
 	/**
 	 * [META_SPACE][STORE_META][STORE-CODE][FIELD-CODE]=[FIELD-NAME][FIELD-TYPE][MODIFIER]
 	 * Add all new fields
@@ -581,43 +629,54 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 	
 	@Override
 	public T store(T t, boolean cache) throws Exception {
-		// TODO Auto-generated method stub
 		// do null check first
 		if (t == null)
 			throw new NullPointerException("Object to persist can't be null");
 		// Decide if it was an update or new addition
 		boolean upd = true;
-		// if id generation is required
+		/**
+		 * If ID generation was required
+		 */
 		if (isGen) {
 			// get ID field
 			Field fld = keys.get(keys.size() - 1).getFieldAccessor().getField();
-			// only generate if value is zero
+			/**
+			 * Only generate ID if field value is 0
+			 */
 			if (fld.getLong(t) == 0) {
 				fld.setLong(t, ctx.genId());
 				upd = false;
 			}
 		}
-		// build new key
+		/**
+		 * Build a new Key
+		 */
 		byte[] key = buildKey(t);
-		// create a cache key
+		/**
+		 * Create a cache entry
+		 */
 		CacheKey k = new CacheKey(key);
-		// lock key
+		/**
+		 * Lock key for atomic update
+		 */
 		ctx.lock(k);
 		try {
-			// if versioning is required
-			if (ver != null) {
+			/**
+			 * If version field was present, ensure version number properly generated
+			 */
+			if (ver) {
 				// get the version field reference
-				Field fld = ver.getFieldAccessor().getField();
+				Field fld = genralFields.get(0).getFieldAccessor().getField();
 				// get the version value
 				int newVer = fld.getInt(t);
-				// if it is update request
+				// if it was a update request
 				if (upd) {
 					// load raw value
 					byte[] val = load(k, cache);
 					// if value found
 					if (val != null) {
 						// get the existing version number
-						int exVer = extractVersion(ByteBuffer.wrap(val));
+						int exVer = ((ByteBuffer) ByteBuffer.wrap(val).position(10)).getInt();
 						// if version doen't match throw stale object exception
 						if (exVer != newVer)
 							throw new StaleObjectException(smInfo.getClassName());
@@ -818,14 +877,12 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 	private final byte[] serializeValue(Object target) throws Exception {
 		// allocate enough memory
 		ByteBuffer buf = ByteBuffer.allocate(MAX_KEY_SIZE);
-		// serialise version property first
-		buf = serialiseVersion(buf, target);
 		// serialise all fields now
-		for (FieldMetaInfo mi : fMap.values()) {
+		for (FieldMetaInfo mi : genralFields) {
 			// serialise field code first
 			buf = serialise(buf, mi.getFldCode());
 			// serialise field value
-			buf = mi.getFieldAccessor().serialize(buf, target);
+			buf = mi.getFieldAccessor().serializeField(buf, target);
 		}
 		// return serialise data
 		return extract(buf);
@@ -863,8 +920,6 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 	final T deSerialize(byte[] value, T target) throws Exception {
 		// now deSerialize value 
 		ByteBuffer buf = ByteBuffer.wrap(value);
-		// De serialise version property first
-		deSerializeVersion(target, null, buf);
 		// just to avoid unnecessary auto boxing of long value
 		final LongWrapper lw = new LongWrapper();
 		// de serialise object
@@ -883,58 +938,10 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 			}
 			// deSerialize
 			mi.getFieldAccessor().deserialize(buf, target);
-		}
+		}		
 		return target;
 	}
-	
 	/**
-	 * Serialise version property
-	 * @param buf
-	 * @return
-	 * @throws Exception
-	 */
-	final ByteBuffer serialiseVersion(ByteBuffer buf, Object target) throws Exception {
-		if (ver != null) {
-			// serialise field code first
-			buf = serialise(buf, ver.getFldCode());
-			// serialise field value
-			buf = ver.getFieldAccessor().serialize(buf, target);
-		}
-		return buf;
-	}
-	
-	/**
-	 * De serialise version property
-	 * @param t
-	 * @param buf
-	 * @return
-	 * @throws Exception
-	 */
-	final T deSerializeVersion(T t, Map<String, FieldAccessor> m, ByteBuffer buf) throws Exception {
-		if (ver != null) {
-			// skip field code
-			buf.position(buf.position() + 9);
-			// if target specified
-			if (t != null) {
-				// de serialise version value and set it to target
-				ver.getFieldAccessor().deserialize(buf, t);				
-			} else {
-				// extract value
-				m.get(ver.getFldName()).set(buf);
-			}
-		}
-		return t;
-	}
-	/**
-	 * Extract version number
-	 * @param value
-	 * @return
-	 */
-	int extractVersion(ByteBuffer buf) {
-		return ((ByteBuffer)buf.position(10)).getInt();
-	}
-	
-    /**
 	 * When key size exceed limit
 	 */
 	static final void keySizeIssue() {
@@ -998,10 +1005,8 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 						buf.position(STORE_DATA_LEN);
 						// iterate over sort keys and ID field accessor
 						for (FieldMetaInfo fm : keys) {
-							// get field accessor
-							FieldAccessor fa = ctx.getFieldAccessor(fm.getFldType());
-							// get field value
-							Object fv = fa.deserialize(buf);
+							// DE Serialise value
+							Object fv = fm.getFieldAccessor().deserialize(buf);
 							// put it to map
 							vMap.put(fm.getFldName(), fv);
 						}
@@ -1011,14 +1016,7 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 						val = ctx.uncompress(val);
 						// get byte buffer from value
 						buf = ByteBuffer.wrap(val);
-						// De serialise version property first
-						if (ver != null) {
-							// extract version value
-							int verVal = extractVersion(buf);
-							// put it in map
-							vMap.put(ver.getFldName(), verVal);
-						}
-						// de serialise the rest now
+						// DE serialise the rest now
 						while (buf.hasRemaining()) {
 							// parse field code
 							long fc = parseLong(buf);
@@ -1032,14 +1030,10 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 								ctx.getFieldAccessor(buf.get(pos)).skip(buf);
 								continue;
 							}
-							// get field name
-							String fName = mi.getFldName();
-							// get field accessor
-							FieldAccessor fa = ctx.getFieldAccessor(mi.getFldType());
 							// get field value
-							Object fv = fa.deserialize(buf);
+							Object fv = mi.getFieldAccessor().deserialize(buf);
 							// put it in map
-							vMap.put(fName, fv);
+							vMap.put(mi.getFldName(), fv);
 						}						
 					}
 					return true;
@@ -1251,11 +1245,7 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 				// copy key fields
 				copyFieldMeta(keys);
 				// copy value fields
-				copyFieldMeta(fMap.values());
-				// if version field available
-				if (ver != null) {
-					map.put(ver.getFldName(), ver.clone());
-				}
+				copyFieldMeta(genralFields);				
 			} catch (Exception e) {
 				throw new RuntimeException(e);
 			}
@@ -1290,14 +1280,14 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 			// get iterator
 			Iterator<FieldMetaInfo> itr = map.values().iterator();
 			// iterate key value pair
-			while (itr.hasNext() && buf.hasRemaining()) {
+			while (buf.hasRemaining() && itr.hasNext()) {
 				// get entry
 				FieldMetaInfo fm = itr.next();
 				// set buffer to field accessor
 				fm.getFieldAccessor().set(buf);
 			}			
 			// mark that key was loaded
-			keyLoaded = true;
+			keyLoaded = true;			
 		} 
 		/**
 		 * De serialise object to map
@@ -1326,7 +1316,7 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 				map.get(fn.getFldName()).getFieldAccessor().set(buf);	
 			}
 			// mark that value was loaded
-			valueLoaded = true;
+			valueLoaded = true;			
 		}
 		/**
 		 * Set value map to target
@@ -1339,7 +1329,7 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 			while (itr.hasNext()) {
 				// Get field and set value
 				itr.next().getFieldAccessor().set(t);			
-			}
+			}			
 		}
 		
 	    @Override
@@ -1388,16 +1378,23 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 
 		@Override
 		public Object getFieldValue(String fname) {
-			// TODO Auto-generated method stub
 			try {
-				// get the corresponding field meta
+				/**
+				 * get the corresponding field meta
+				 */
 				FieldMetaInfo fm = map.get(fname);
-				// if null throw exception
+				/**
+				 * if null throw exception
+				 */
 				if (fm == null)
 				     throw new RuntimeException("Field '" + fname + "' not valid for class " + smInfo.getClassName());
-				// if not key field
+				/**
+				 * If not key field...
+				 */
 				if (!fm.isKey()) {
-					// if value not loaded
+					/**
+					 * Check if general fields are loaded or not
+					 */
 					if (!valueLoaded) {
 						// uncompress value first
 						value = ctx.uncompress(value);
@@ -1405,9 +1402,13 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 						valueToMap(value);
 					}					
 				} 
-				// if key, and key map is not loaded yet
+				/**
+				 * If not key field, ensure key fields are loaded
+				 */
 				else if (!keyLoaded) {
-					// load key bytes to map
+					/**
+					 * Load key fields to map
+					 */
 					keyToMap(key);
 				}
 				// get field value
@@ -1452,28 +1453,44 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 		@Override
 		public T currentRecord() {
 			if (t == null) {
-				// check if has next record was called before or not
+				/**
+				 * Ensure record is loaded
+				 */
 				if (key == null)
 					throw new NoSuchElementException();
-				// load target
+				/**
+				 * Load target
+				 */
 				try {
-					// create a new instance
+					/**
+					 * Instantiate a new Object of type T
+					 */
 					t = ((Class<T>) smInfo.getClazz()).newInstance();
-					// if key not loaded than load it first
+					/**
+					 * If keys were not loaded
+					 */
 					if (!keyLoaded) {
-						// convert key bytes to map
+						/**
+						 * Load keys to map
+						 */
 						keyToMap(key);						
 					}
-					// if value not loaded
-					else if (!valueLoaded) {
+					/**
+					 * If values were not loaded
+					 */
+					if (!valueLoaded) {
 						// uncompress value first
 						value = ctx.uncompress(value);
 						// convert value bytes to map
 						valueToMap(value);
 					}					
-					// map - target
+					/**
+					 * Convert map to object
+					 */
 				    mapToTarget();
-					// put it in cache if entry not present already
+					/**
+					 * put it in cache if entry not present already
+					 */
 					cachePut(new CacheKey(key), new CacheValue(value), true);					
 				} catch (Exception e) {
 					throw new RuntimeException(e);
@@ -1511,10 +1528,11 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 			 */
 			if (itr != null) {
 				itr.close();
-				map.clear();
 				itr = null;
 				t = null;
-				System.out.println(count);
+				keyLoaded = valueLoaded = false;
+				System.out.println("[QryCtx] Number of loads: " + count);
+				count = 0;				
 			}
 		}		
 	}

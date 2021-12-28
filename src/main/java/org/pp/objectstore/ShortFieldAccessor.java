@@ -123,8 +123,9 @@ final class ShortFieldAccessor extends AbstractFieldAccessor {
 	@Override
 	public Object get() throws Exception {
 		// TODO Auto-generated method stub
-		return getShortValue();
+		return (int) getShortValue();
 	}
+	
 	@Override
 	public void set(Object target) throws Exception {
 		// get short value
@@ -136,7 +137,7 @@ final class ShortFieldAccessor extends AbstractFieldAccessor {
 	@Override
 	public FieldAccessor newInstance() throws Exception {
 		// TODO Auto-generated method stub
-		return new ShortFieldAccessor(null);
+		return new ShortFieldAccessor(fld);
 	}	
 	
 	@Override

@@ -96,7 +96,7 @@ public final class FieldMetaInfo implements Cloneable {
 	}
 	
 	public boolean isKey() {
-		return fldModifier >= FLD_MOD_SORT_KEY ? true : false;
+		return fldModifier >= FLD_MOD_SORT_KEY;
 	}
 	
 	@Override

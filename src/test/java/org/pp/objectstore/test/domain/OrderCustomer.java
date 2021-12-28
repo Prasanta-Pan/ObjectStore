@@ -1,17 +1,18 @@
 package org.pp.objectstore.test.domain;
+
 import static org.pp.objectstore.test.Util.MALE;
 import static org.pp.objectstore.test.Util.genChar;
 import static org.pp.objectstore.test.Util.genDateToMilis;
 import static org.pp.objectstore.test.Util.genDouble;
 import static org.pp.objectstore.test.Util.genFloat;
-import static org.pp.objectstore.test.Util.genShort;
-import static org.pp.objectstore.test.Util.millisToDateString;
 import static org.pp.objectstore.test.Util.genIndex;
-import static org.pp.objectstore.test.Util.getName;
+import static org.pp.objectstore.test.Util.genShort;
+import static org.pp.objectstore.test.Util.genStatus;
 import static org.pp.objectstore.test.Util.getAge;
 import static org.pp.objectstore.test.Util.getEmail;
 import static org.pp.objectstore.test.Util.getGender;
-import static org.pp.objectstore.test.Util.genStatus;
+import static org.pp.objectstore.test.Util.getName;
+import static org.pp.objectstore.test.Util.millisToDateString;
 
 import java.util.Objects;
 
@@ -20,9 +21,9 @@ import org.pp.objectstore.interfaces.Id;
 import org.pp.objectstore.interfaces.SortKey;
 import org.pp.objectstore.interfaces.Version;
 
-@Collection("customer_order")
-public class CustomerOrder implements Comparable<CustomerOrder> {
-	@SortKey(1)
+@Collection("order_customer")
+public class OrderCustomer implements Comparable<OrderCustomer> {
+	@SortKey(2)
 	private String customerEmail;
     //
 	private String customerName;
@@ -39,7 +40,7 @@ public class CustomerOrder implements Comparable<CustomerOrder> {
 	// 
 	private char recordStatus;
 	//
-	@SortKey(2) private long orderDate;
+	@SortKey(1) private long orderDate;
 	//
 	@Id private long orderId;
 	// 
@@ -48,7 +49,7 @@ public class CustomerOrder implements Comparable<CustomerOrder> {
 	/**
 	 * Default constructor must be defined  
 	 */
-	public CustomerOrder() {
+	public OrderCustomer() {
 		
 	}
 	
@@ -58,7 +59,7 @@ public class CustomerOrder implements Comparable<CustomerOrder> {
 	 * @param orderDate
 	 * @param orderId
 	 */
-	public CustomerOrder(String customerEmail, long orderDate,long orderId) {
+	public OrderCustomer(String customerEmail, long orderDate,long orderId) {
 		this.customerEmail = customerEmail;
 	    this.orderDate = orderDate;
 	    this.orderId = orderId;
@@ -78,7 +79,7 @@ public class CustomerOrder implements Comparable<CustomerOrder> {
 	 * @param recordStatus
 	 * @param version
 	 */
-	public CustomerOrder(String customerEmail, long orderDate, 
+	public OrderCustomer(String customerEmail, long orderDate, 
 						 String customerName, byte customerAge,boolean customerSex, 
 						 double totalOrder, short numOfUnits, float unitPrice, char recordStatus) 
 	{
@@ -207,8 +208,8 @@ public class CustomerOrder implements Comparable<CustomerOrder> {
 
 	@Override
 	public boolean equals(Object o) {
-		if (o instanceof CustomerOrder) {
-			CustomerOrder othr = (CustomerOrder) o;
+		if (o instanceof OrderCustomer) {
+			OrderCustomer othr = (OrderCustomer) o;
 			return 
 				// compare customer email's
 				Objects.equals(customerEmail, othr.customerEmail) &&
@@ -254,14 +255,14 @@ public class CustomerOrder implements Comparable<CustomerOrder> {
 	}
 
 	@Override
-	public int compareTo(CustomerOrder o) {
+	public int compareTo(OrderCustomer o) {
+		// compare order date first
+		if (orderDate != o.orderDate)
+			return orderDate > o.orderDate ? 1 : -1;
 		int res = 0;
 		// compare email first
 		if ((res = customerEmail.compareTo(o.customerEmail)) != 0)
 			return res;
-		// compare order date now
-		if (orderDate != o.orderDate)
-			return orderDate > o.orderDate ? 1 : -1;
 		// compare order id now
 	  	return orderId != o.orderId ? orderId > o.orderId ? 1 : -1 : 0;
 	}	
