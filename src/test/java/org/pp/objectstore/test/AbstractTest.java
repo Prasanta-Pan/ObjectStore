@@ -15,7 +15,7 @@ abstract class AbstractTest {
 	// DB root folder
     private static final String dbRoot = "/Users/prasantsmac/Desktop/DBTest";
     // Object store factory
-    protected ObjectStoreFactory factory = null;
+    protected static ObjectStoreFactory factory = null;
           
     /**
      * Delete database directory
@@ -36,7 +36,7 @@ abstract class AbstractTest {
      * Open object store factory
      * @throws Exception
      */
-    protected final void openDatabase() throws Exception {
+    static final void openDatabase() throws Exception {
     	if (factory == null) {
 	    	// database location
 	    	URI uri = new URI("file:" + dbRoot);
@@ -49,7 +49,7 @@ abstract class AbstractTest {
      * Close database 
      * @throws Exception
      */
-    protected final void closeDatabase() throws Exception {
+    static final void closeDatabase() throws Exception {
     	if (factory != null) {
     		factory.close();
     		factory = null;

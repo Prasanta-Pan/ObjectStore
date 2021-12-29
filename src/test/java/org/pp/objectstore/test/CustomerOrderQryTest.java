@@ -47,6 +47,7 @@ public class CustomerOrderQryTest extends AbstractTest {
      */
 	@AfterAll
 	public static void cleanUp() throws Exception {
+		closeDatabase();
 		delDb();		
 	}
 	

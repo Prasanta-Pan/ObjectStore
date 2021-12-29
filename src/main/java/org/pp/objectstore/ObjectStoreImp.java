@@ -120,6 +120,8 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 		// verify version field if not first time
 		if (coll.size() == 0)
 		   verifyVersion((FieldMetaInfo) fields[1], fh);
+		// persist sort keys and version if the store being created first time
+		addFieldsToStore(coll);
 		// verify rest of the fields
 		coll = verifyGeneralFields((List<FieldMetaInfo>) fields[2], fh);
 		// persist rest of the fields now
@@ -513,7 +515,7 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 		// return
 		return codeMap;
 	}
-	
+		
 	/**
 	 * [META_SPACE][STORE_META][STORE-CODE][FIELD-CODE]=[FIELD-NAME][FIELD-TYPE][MODIFIER]
 	 * Add all new fields
@@ -1006,7 +1008,7 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 						// iterate over sort keys and ID field accessor
 						for (FieldMetaInfo fm : keys) {
 							// DE Serialise value
-							Object fv = fm.getFieldAccessor().deserialize(buf);
+							Object fv = ctx.getFieldAccessor(fm.getFldType()).deserialize(buf);
 							// put it to map
 							vMap.put(fm.getFldName(), fv);
 						}
@@ -1031,7 +1033,7 @@ final class ObjectStoreImp<T> implements ObjectStore<T> {
 								continue;
 							}
 							// get field value
-							Object fv = mi.getFieldAccessor().deserialize(buf);
+							Object fv = ctx.getFieldAccessor(mi.getFldType()).deserialize(buf);
 							// put it in map
 							vMap.put(mi.getFldName(), fv);
 						}						

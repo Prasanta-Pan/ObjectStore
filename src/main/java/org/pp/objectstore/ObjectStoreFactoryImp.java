@@ -51,7 +51,6 @@ import org.pp.storagengine.api.KVEntry;
 import org.pp.storagengine.api.imp.KVEngineImp;
 import org.pp.storagengine.api.imp.KeyLocker;
 import org.pp.storagengine.api.imp.LRUCache;
-import org.xerial.snappy.Snappy;
 
 class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectStoreContext {
 	/**
@@ -574,13 +573,13 @@ class ObjectStoreFactoryImp extends ObjectStoreFactory implements GlobalObjectSt
 	@Override
 	public byte[] compress(byte[] data) throws Exception {
 		// compress data using snappy
-		return Snappy.compress(data);
+		return data;
 	}
 
 	@Override
 	public byte[] uncompress(byte[] data) throws Exception {
 		// uncompress data using snappy
-		return Snappy.uncompress(data);
+		return data;
 	}
 
 	@Override
